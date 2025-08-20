@@ -1,0 +1,597 @@
+<apex:page showHeader="false" sidebar="false" standardStylesheets="false" docType="html-5.0">
+    <html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>ArcGIS Map</title>
+        
+        <!-- ArcGIS Maps SDK 4.33 -->
+        <link rel="stylesheet" href="https://js.arcgis.com/4.33/esri/themes/light/main.css" />
+        <script src="https://js.arcgis.com/4.33/init.js"></script>
+        
+        <style>
+            html, body, #viewDiv {
+                padding: 0;
+                margin: 0;
+                height: 100%;
+                width: 100%;
+                font-family: 'Avenir Next', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+            }
+            
+            /* Style pour le widget Search */
+            .esri-search {
+                width: 300px;
+                max-width: 90vw;
+            }
+            
+            .esri-search__input {
+                border-radius: 6px;
+                border: 2px solid #e1e5e9;
+                font-size: 14px;
+                padding: 8px 12px;
+                transition: border-color 0.2s ease;
+            }
+            
+            .esri-search__input:focus {
+                border-color: #0079c1;
+                outline: none;
+                box-shadow: 0 0 0 3px rgba(0, 121, 193, 0.1);
+            }
+            
+            .esri-search__suggestions {
+                border-radius: 6px;
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+                border: 1px solid #e1e5e9;
+            }
+            
+            .esri-search__suggestion {
+                padding: 10px 12px;
+                border-bottom: 1px solid #f0f0f0;
+                cursor: pointer;
+                transition: background-color 0.2s ease;
+            }
+            
+            .esri-search__suggestion:hover {
+                background-color: #f8f9fa;
+            }
+            
+            .esri-search__suggestion:last-child {
+                border-bottom: none;
+            }
+        </style>
+    </head>
+    <body>
+        <div id="viewDiv"></div>
+        
+        <script>
+            require([
+                "esri/Map",
+                "esri/views/MapView",
+                "esri/geometry/Point",
+                "esri/Graphic",
+                "esri/symbols/SimpleMarkerSymbol",
+                "esri/PopupTemplate",
+                "esri/widgets/Popup",
+                "esri/widgets/Search",
+                "esri/widgets/Compass",
+                "esri/widgets/Locate",
+                "esri/widgets/BasemapToggle",
+                "esri/widgets/Sketch",
+                "esri/layers/GraphicsLayer"
+            ], function(Map, MapView, Point, Graphic, SimpleMarkerSymbol, PopupTemplate, Popup, Search, Compass, Locate, BasemapToggle, Sketch, GraphicsLayer) {
+                
+                console.log('🗺️ Initialisation ArcGIS dans Visualforce...');
+                
+                // Créer la carte
+                const map = new Map({
+                    basemap: "streets-navigation-vector"
+                });
+
+                // Créer un GraphicsLayer dédié pour les dessins Sketch
+                const sketchLayer = new GraphicsLayer({
+                    title: "Dessins utilisateur"
+                });
+                map.add(sketchLayer);
+                
+                // Créer la vue
+                const view = new MapView({
+                    container: "viewDiv",
+                    map: map,
+                    center: [-73.5673, 45.5017], // Place Ville-Marie, Montréal
+                    zoom: 15,
+                    constraints: {
+                        rotationEnabled: true, // Activer la rotation pour le Compass
+                        rotationAngle: 0 // Commencer avec l'orientation nord
+                    }
+                });
+
+                // Créer et configurer le widget Search avec autocomplétion (sans géolocalisation)
+                const searchWidget = new Search({
+                    view: view,
+                    sources: [{
+                        url: "https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer",
+                        singleLineFieldName: "SingleLine",
+                        name: "ArcGIS World Geocoding Service",
+                        countryCode: "CAN", // Priorité au Canada
+                        maxResults: 10,
+                        maxSuggestions: 8,
+                        minSuggestCharacters: 1,
+                        searchExtent: view.extent
+                    }],
+                    autoComplete: true,
+                    searchAllEnabled: false, // Désactiver la recherche globale pour éviter la géolocalisation
+                    includeDefaultSources: false, // Exclure les sources par défaut (incluant géolocalisation)
+                    locationEnabled: false, // Désactiver explicitement la géolocalisation dans Search
+                    popupEnabled: false, // On gère nos propres popups
+                    resultGraphicEnabled: false, // On gère nos propres graphics
+                    container: "searchContainer"
+                });
+
+                // Créer et configurer le widget Compass (navigation)
+                const compassWidget = new Compass({
+                    view: view,
+                    label: "Réinitialiser l'orientation nord"
+                });
+
+                // Écouter les changements de rotation pour informer l'utilisateur
+                view.watch("rotation", function(rotation) {
+                    if (Math.abs(rotation) > 1) { // Si rotation significative
+                        console.log('🧭 Carte tournée de', rotation.toFixed(1), 'degrés');
+                        console.log('💡 Cliquez sur le compass pour remettre au nord');
+                    }
+                });
+
+                // Écouter les clics sur le compass
+                compassWidget.on("click", function() {
+                    console.log('🧭 Compass cliqué - orientation remise au nord');
+                });
+
+                // Créer et configurer le widget Locate (géolocalisation native ArcGIS)
+                const locateWidget = new Locate({
+                    view: view,
+                    label: "Ma position",
+                    useHeadingEnabled: true,
+                    goToOverride: function(view, options) {
+                        // Personnaliser le comportement de navigation vers la position
+                        view.goTo({
+                            target: options.target,
+                            zoom: 18, // Zoom plus proche pour la position utilisateur
+                            duration: 1000
+                        });
+                    }
+                });
+
+                // Créer et configurer le widget BasemapToggle (changement de fond de carte)
+                const basemapToggleWidget = new BasemapToggle({
+                    view: view,
+                    nextBasemap: "satellite", // Vue satellite comme alternative
+                    label: "Basculer vers satellite"
+                });
+
+                // Créer et configurer le widget Sketch (dessin de formes)
+                const sketchWidget = new Sketch({
+                    view: view,
+                    layer: sketchLayer,
+                    creationMode: "hybrid", // Permet création et édition
+                    label: "Outils de dessin",
+                    // Configurer les outils disponibles
+                    visibleElements: {
+                        createTools: {
+                            point: true,
+                            polyline: true,
+                            polygon: true,
+                            rectangle: true,
+                            circle: true
+                        },
+                        selectionTools: {
+                            "lasso-selection": true,
+                            "rectangle-selection": true
+                        },
+                        undoRedoMenu: true,
+                        settingsMenu: true
+                    }
+                });
+
+                // Attendre que le widget soit initialisé
+                sketchWidget.when(() => {
+                    console.log('✅ Widget Sketch initialisé avec succès');
+                    console.log('🎨 Outils disponibles: Point, Polyline, Polygon, Rectangle, Circle');
+                });
+
+                // Gestion simple des erreurs de géolocalisation
+                locateWidget.on("locate-error", function(event) {
+                    console.warn('⚠️ Erreur de géolocalisation:', event.error);
+                    
+                    if (event.error.code === 1) {
+                        // Permission refusée
+                        console.warn('❌ Permission de géolocalisation refusée par l\'utilisateur');
+                    } else if (event.error.code === 2) {
+                        // Position indisponible
+                        console.warn('❌ Position indisponible');
+                    } else if (event.error.code === 3) {
+                        // Timeout
+                        console.warn('⏰ Timeout de géolocalisation');
+                    }
+                });
+
+                // Gérer le succès de géolocalisation
+                locateWidget.on("locate", function(event) {
+                    console.log('✅ Géolocalisation réussie:', event);
+                });
+
+                // Ajouter le widget Locate à la vue
+                view.ui.add(locateWidget, "bottom-left");
+
+                // Ajouter les widgets à la vue selon les conventions ArcGIS
+                view.ui.add(searchWidget, "top-left");      // Recherche (déjà implémenté)
+                view.ui.add(compassWidget, "top-right");   // Compass (navigation)
+                view.ui.add(basemapToggleWidget, "top-right"); // BasemapToggle (changement de fond)
+                view.ui.add(locateWidget, "bottom-left");  // Locate (géolocalisation)
+                view.ui.add(sketchWidget, "bottom-right"); // Sketch (outils de dessin)
+                // Zoom reste en "bottom-right" par défaut (coexiste avec Sketch)
+
+                console.log('🎯 Widgets ajoutés selon conventions ArcGIS:');
+                console.log('  - Search: top-left (recherche)');
+                console.log('  - Compass: top-right (navigation)');
+                console.log('  - BasemapToggle: top-right (changement de fond)');
+                console.log('  - Locate: bottom-left (géolocalisation)');
+                console.log('  - Sketch: bottom-right (outils de dessin)');
+                console.log('  - Zoom: bottom-right (par défaut, coexiste avec Sketch)');
+                console.log('');
+                console.log('🧭 ROTATION ACTIVÉE:');
+                console.log('  - PC: Shift + glisser pour tourner la carte');
+                console.log('  - Mobile: Rotation avec deux doigts');
+                console.log('  - Compass: Clic pour remettre au nord');
+
+                // Écouter la sélection d'une suggestion de recherche
+                searchWidget.on("select-result", function(event) {
+                    console.log('🔍 Suggestion sélectionnée:', event);
+                    
+                    if (event.result) {
+                        const result = event.result;
+                        const location = result.extent || result.feature.geometry;
+                        
+                        if (location) {
+                            // Centrer la carte sur le résultat
+                            if (location.extent) {
+                                view.goTo(location.extent, { duration: 1000 });
+                            } else {
+                                view.goTo(location, { duration: 1000 });
+                            }
+                            
+                            // Créer un marqueur sur l'emplacement trouvé
+                            const point = location.extent ? location.extent.center : location;
+                            const symbol = new SimpleMarkerSymbol({
+                                color: [0, 122, 194], // Bleu ArcGIS
+                                outline: {
+                                    color: [255, 255, 255],
+                                    width: 2
+                                },
+                                size: 12
+                            });
+                            
+                            const graphic = new Graphic({
+                                geometry: point,
+                                symbol: symbol,
+                                attributes: {
+                                    latitude: point.latitude ? point.latitude.toFixed(6) : "N/A",
+                                    longitude: point.longitude ? point.longitude.toFixed(6) : "N/A",
+                                    address: result.name || "Adresse trouvée"
+                                },
+                                popupTemplate: popupTemplate
+                            });
+                            
+                            // Nettoyer les anciens marqueurs et ajouter le nouveau
+                            view.graphics.removeAll();
+                            view.graphics.add(graphic);
+                            
+                            // Ouvrir immédiatement le popup avec "Géocodage en cours..."
+                            view.openPopup({
+                                title: "📍 Adresse",
+                                content: `
+                                    <div style="padding: 15px; text-align: center;">
+                                        <div style="margin-bottom: 15px;">
+                                            <img src="https://js.arcgis.com/4.33/esri/themes/base/images/Loading_Indicator.gif" alt="Loading..." width="20" height="20" />
+                                        </div>
+                                        <p style="font-size: 14px; color: #666; margin: 0;">
+                                            Géocodage en cours...
+                                        </p>
+                                    </div>
+                                `,
+                                location: point
+                            });
+                            
+                            // Faire le géocodage en arrière-plan comme pour les clics manuels
+                            performGeocoding(point.latitude, point.longitude, graphic);
+                            
+                            console.log('✅ Carte centrée sur:', result.name, 'géocodage en cours...');
+                        }
+                    }
+                });
+                
+                // Créer le PopupTemplate pour afficher les informations de géocodage
+                const popupTemplate = new PopupTemplate({
+                    title: "📍 Informations de localisation",
+                    content: [
+                        {
+                            type: "fields",
+                            fieldInfos: [
+                                {
+                                    fieldName: "address",
+                                    label: "Adresse",
+                                    visible: true
+                                },
+                                {
+                                    fieldName: "latitude",
+                                    label: "Latitude",
+                                    visible: true
+                                },
+                                {
+                                    fieldName: "longitude",
+                                    label: "Longitude",
+                                    visible: true
+                                }
+                            ]
+                        }
+                    ]
+                });
+                
+                // Configurer la vue pour gérer les clics sur les graphics
+                view.when(() => {
+                    // Écouter les clics sur les graphics (pour les actions du popup)
+                    view.on("click", function(event) {
+                        // Vérifier si on a cliqué sur un graphic
+                        view.hitTest(event).then(function(response) {
+                            if (response.results.length > 0) {
+                                const graphic = response.results[0].graphic;
+                                console.log('🎯 Graphic cliqué:', graphic);
+                                
+                                // Si le graphic a des actions, on peut les gérer ici
+                                if (graphic.attributes && graphic.attributes.hasActions) {
+                                    console.log('🎯 Actions disponibles sur le graphic');
+                                }
+                            }
+                        });
+                    });
+                });
+                
+                view.when(() => {
+                    console.log('✅ Carte ArcGIS VF initialisée !');
+                    
+                    // Notifier le parent (LWC) que la carte est prête
+                    if (window.parent) {
+                        window.parent.postMessage({
+                            type: 'MAP_READY',
+                            message: 'ArcGIS map initialized successfully'
+                        }, '*');
+                    }
+                });
+                
+                // Écouter les clics sur la carte
+                view.on("click", function(event) {
+                    const coords = {
+                        longitude: event.mapPoint.longitude,
+                        latitude: event.mapPoint.latitude
+                    };
+                    
+                    console.log('🖱️ Clic détecté - Coordonnées:', coords);
+                    console.log('📍 Longitude:', coords.longitude);
+                    console.log('📍 Latitude:', coords.latitude);
+                    
+                    // Envoyer les coordonnées au parent (LWC)
+                    if (window.parent) {
+                        window.parent.postMessage({
+                            type: 'MAP_CLICK',
+                            coordinates: coords
+                        }, '*');
+                        console.log('📨 Message envoyé au parent LWC');
+                    }
+                    
+                    // Créer un point pour le popup
+                    const point = new Point({
+                        longitude: event.mapPoint.longitude,
+                        latitude: event.mapPoint.latitude
+                    });
+                    
+                    // Créer un marqueur temporaire
+                    const symbol = new SimpleMarkerSymbol({
+                        color: [226, 119, 40],
+                        outline: {
+                            color: [255, 255, 255],
+                            width: 2
+                        }
+                    });
+                    
+                    // Créer le graphic avec le popup
+                    const graphic = new Graphic({
+                        geometry: point,
+                        symbol: symbol,
+                        popupTemplate: popupTemplate,
+                        attributes: {
+                            latitude: coords.latitude.toFixed(6),
+                            longitude: coords.longitude.toFixed(6),
+                            address: "Géocodage en cours..."
+                        }
+                    });
+                    
+                    // Nettoyer les anciens marqueurs et ajouter le nouveau
+                    view.graphics.removeAll();
+                    view.graphics.add(graphic);
+                    
+                    // Ouvrir immédiatement le popup avec "Géocodage en cours..."
+                    view.openPopup({
+                        title: "📍 Adresse",
+                        content: `
+                            <div style="padding: 15px; text-align: center;">
+                                <div style="margin-bottom: 15px;">
+                                    <img src="https://js.arcgis.com/4.33/esri/themes/base/images/Loading_Indicator.gif" alt="Loading..." width="20" height="20" />
+                                </div>
+                                <p style="font-size: 14px; color: #666; margin: 0;">
+                                    Géocodage en cours...
+                                </p>
+                            </div>
+                        `,
+                        location: point
+                    });
+                    
+                    // Faire le géocodage en arrière-plan
+                    performGeocoding(coords.latitude, coords.longitude, graphic);
+                    
+                    console.log('✅ Popup ouvert immédiatement, géocodage en cours');
+                });
+                
+                // Fonction de géocodage
+                function performGeocoding(latitude, longitude, graphic) {
+                    console.log('🌍 Début géocodage pour:', latitude, longitude);
+                    
+                    // Appel à l'API ArcGIS Geocoding
+                    const geocodeUrl = `https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/reverseGeocode?location=${longitude},${latitude}&outSR=4326&returnIntersection=false&f=json`;
+                    
+                    fetch(geocodeUrl)
+                        .then(response => response.json())
+                        .then(data => {
+                            console.log('✅ Réponse géocodage:', data);
+                            
+                            if (data.address) {
+                                const address = formatAddress(data.address);
+                                console.log('🏠 Adresse formatée:', address);
+                                
+                                // Mettre à jour le graphic avec l'adresse
+                                graphic.attributes.address = address;
+                                
+                                console.log('✅ Adresse mise à jour dans le graphic');
+                                
+                                // Ouvrir automatiquement le popup avec l'adresse
+                                view.openPopup({
+                                    title: "📍 Adresse",
+                                    content: `
+                                        <div style="padding: 20px; text-align: center;">
+                                            <div style="font-size: 16px; line-height: 1.4; color: #333;">
+                                                ${address}
+                                            </div>
+                                        </div>
+                                    `,
+                                    location: graphic.geometry
+                                });
+                                
+                                console.log('🎯 Popup ouvert automatiquement avec l\'adresse');
+                            } else {
+                                console.log('⚠️ Aucune adresse trouvée');
+                                graphic.attributes.address = "Adresse non trouvée";
+                                
+                                // Ouvrir popup avec message d'erreur
+                                view.openPopup({
+                                    title: "📍 Adresse",
+                                    content: `
+                                        <div style="padding: 20px; text-align: center;">
+                                            <div style="font-size: 16px; color: #d73a49; margin-bottom: 10px;">
+                                                ⚠️ Adresse non trouvée
+                                            </div>
+                                            <div style="font-size: 14px; color: #666;">
+                                                Impossible de récupérer l'adresse pour ces coordonnées
+                                            </div>
+                                        </div>
+                                    `,
+                                    location: graphic.geometry
+                                });
+                            }
+                        })
+                        .catch(error => {
+                            console.error('❌ Erreur géocodage:', error);
+                            graphic.attributes.address = "Erreur de géocodage";
+                            
+                            // Ouvrir popup avec message d'erreur
+                            view.openPopup({
+                                title: "📍 Adresse",
+                                content: `
+                                    <div style="padding: 20px; text-align: center;">
+                                        <div style="font-size: 16px; color: #d73a49; margin-bottom: 10px;">
+                                            ❌ Erreur de géocodage
+                                        </div>
+                                        <div style="font-size: 14px; color: #666;">
+                                            Impossible de récupérer l'adresse
+                                        </div>
+                                    </div>
+                                `,
+                                location: graphic.geometry
+                            });
+                        });
+                }
+                
+                // Fonction de formatage d'adresse
+                function formatAddress(addressData) {
+                    const parts = [];
+                    
+                    if (addressData.Address) parts.push(addressData.Address);
+                    if (addressData.City) parts.push(addressData.City);
+                    if (addressData.Region) parts.push(addressData.Region);
+                    if (addressData.Postal) parts.push(addressData.Postal);
+                    if (addressData.CountryCode) parts.push(addressData.CountryCode);
+                    
+                    return parts.length > 0 ? parts.join(', ') : 'Adresse non disponible';
+                }
+                
+                // Écouter les messages du parent (LWC)
+                window.addEventListener('message', function(event) {
+                    console.log('📨 Message reçu du LWC:', event.data);
+                    
+                    if (event.data.type === 'CENTER_MAP') {
+                        view.center = [event.data.longitude, event.data.latitude];
+                        if (event.data.zoom) {
+                            view.zoom = event.data.zoom;
+                        }
+                    } else if (event.data.type === 'GEOCODE_REQUEST') {
+                        console.log('🌍 Demande de géocodage reçue:', event.data.coordinates);
+                        
+                        // Créer un point pour le popup
+                        const point = new Point({
+                            longitude: event.data.coordinates.longitude,
+                            latitude: event.data.coordinates.latitude
+                        });
+                        
+                        // Créer le graphic avec le popup
+                        const graphic = new Graphic({
+                            geometry: point,
+                            symbol: new SimpleMarkerSymbol({
+                                color: [226, 119, 40],
+                                outline: { color: [255, 255, 255], width: 2 }
+                            }),
+                            popupTemplate: popupTemplate,
+                            attributes: {
+                                latitude: event.data.coordinates.latitude.toFixed(6),
+                                longitude: event.data.coordinates.longitude.toFixed(6),
+                                address: "Géocodage en cours..."
+                            }
+                        });
+                        
+                        // Nettoyer et ajouter le nouveau marqueur
+                        view.graphics.removeAll();
+                        view.graphics.add(graphic);
+                        
+                        // Ouvrir immédiatement le popup avec "Géocodage en cours..."
+                        view.openPopup({
+                            title: "📍 Adresse",
+                            content: `
+                                <div style="padding: 15px; text-align: center;">
+                                    <div style="margin-bottom: 15px;">
+                                        <img src="https://js.arcgis.com/4.33/esri/themes/base/images/Loading_Indicator.gif" alt="Loading..." width="20" height="20" />
+                                    </div>
+                                    <p style="font-size: 20px; color: #666; margin: 0;">
+                                        Géocodage en cours...
+                                    </p>
+                                </div>
+                            `,
+                            location: point
+                        });
+                        
+                        // Faire le géocodage
+                        performGeocoding(event.data.coordinates.latitude, event.data.coordinates.longitude, graphic);
+                        
+                        console.log('✅ Popup ouvert depuis LWC, géocodage en cours');
+                    }
+                });
+            });
+        </script>
+    </body>
+    </html>
+</apex:page>

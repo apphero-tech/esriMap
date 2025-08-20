@@ -1,0 +1,100 @@
+.esri-map-container {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    background-color: #ffffff;
+}
+
+.map-header {
+    background-color: #f8f9fa;
+    border-bottom: 1px solid #e1e5e9;
+    flex-shrink: 0;
+}
+
+.map-main-container {
+    flex: 1;
+    display: flex;
+    min-height: 0;
+}
+
+/* Styles de base pour la carte */
+.map-container {
+    border-radius: 4px;
+    overflow: hidden;
+    height: 70vh;
+    min-height: 500px;
+    width: 100%;
+}
+
+.formes-panel {
+    width: 300px;
+    background-color: #f8f9fa;
+    border-left: 1px solid #e1e5e9;
+    overflow-y: auto;
+    flex-shrink: 0;
+}
+
+.formes-list {
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.forme-item {
+    background-color: #ffffff;
+    border-radius: 4px;
+    margin-bottom: 8px;
+    transition: background-color 0.2s ease;
+}
+
+.forme-item:hover {
+    background-color: #f0f0f0;
+}
+
+.map-instructions {
+    background-color: #f8f9fa;
+    border-top: 1px solid #e1e5e9;
+    flex-shrink: 0;
+}
+
+.sauvegarde-button {
+    min-width: 120px;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+    .map-main-container {
+        flex-direction: column;
+    }
+    
+    .formes-panel {
+        width: 100%;
+        border-left: none;
+        border-top: 1px solid #e1e5e9;
+    }
+    
+    .map-header .slds-grid {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .map-header .slds-grid_align-end {
+        margin-top: 8px;
+        width: 100%;
+        justify-content: flex-end;
+    }
+}
+
+/* Ajustements responsives */
+@media (max-width: 768px) {
+    .map-container {
+        height: 60vh;
+        min-height: 400px;
+    }
+}
+
+@media (min-width: 1200px) {
+    .map-container {
+        height: 70vh;
+        min-height: 500px;
+    }
+}
