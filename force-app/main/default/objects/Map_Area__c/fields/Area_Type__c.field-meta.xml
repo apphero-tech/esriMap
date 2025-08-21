@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Area_Type__c</fullName>
+    <externalId>false</externalId>
+    <label>Area Type</label>
+    <required>true</required>
+    <trackHistory>false</trackHistory>
+    <trackTrending>false</trackTrending>
+    <type>Picklist</type>
+    <valueSet>
+        <restricted>true</restricted>
+        <valueSetDefinition>
+            <sorted>false</sorted>
+            <value>
+                <fullName>Point</fullName>
+                <default>false</default>
+                <label>Point</label>
+            </value>
+            <value>
+                <fullName>Polyline</fullName>
+                <default>false</default>
+                <label>Polyline</label>
+            </value>
+            <value>
+                <fullName>Polygon</fullName>
+                <default>false</default>
+                <label>Polygon</label>
+            </value>
+            <value>
+                <fullName>Rectangle</fullName>
+                <default>false</default>
+                <label>Rectangle</label>
+            </value>
+            <value>
+                <fullName>Circle</fullName>
+                <default>false</default>
+                <label>Circle</label>
+            </value>
+        </valueSetDefinition>
+    </valueSet>
+</CustomField>
