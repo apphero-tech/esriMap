@@ -1,18 +1,41 @@
-# Salesforce DX Project: Next Steps
+# ESRI Map - Salesforce Lightning Web Component
 
-Now that you’ve created a Salesforce DX project, what’s next? Here are some documentation resources to get you started.
+Un composant Salesforce Lightning Web Component (LWC) qui intègre des cartes ESRI/ArcGIS dans vos pages Salesforce.
 
-## How Do You Plan to Deploy Your Changes?
+## 🗺️ Fonctionnalités
 
-Do you want to deploy a set of changes, or create a self-contained application? Choose a [development model](https://developer.salesforce.com/tools/vscode/en/user-guide/development-models).
+- **Carte interactive** : Intégration de cartes ESRI avec Leaflet/OpenStreetMap
+- **Géocodage** : Service Apex pour la recherche d'adresses via l'API ArcGIS
+- **Interface Lightning** : Composant LWC respectant les standards Salesforce
+- **Page Visualforce** : Page personnalisée pour afficher la carte
 
-## Configure Your Salesforce DX Project
+## 🏗️ Architecture
 
-The `sfdx-project.json` file contains useful configuration information for your project. See [Salesforce DX Project Configuration](https://developer.salesforce.com/docs/atlas.en-us.sfdx_dev.meta/sfdx_dev/sfdx_dev_ws_config.htm) in the _Salesforce DX Developer Guide_ for details about this file.
+- **LWC** : `esriMap` - Composant principal de la carte
+- **Apex** : `ArcGISGeocodeService` - Service de géocodage
+- **Named Credential** : `ArcGIS_Services` - Configuration des appels API
+- **Page** : `ArcGISMap` - Page Visualforce d'affichage
 
-## Read All About It
+## 🚀 Installation
 
-- [Salesforce Extensions Documentation](https://developer.salesforce.com/tools/vscode/)
-- [Salesforce CLI Setup Guide](https://developer.salesforce.com/docs/atlas.en-us.sfdx_setup.meta/sfdx_setup/sfdx_setup_intro.htm)
-- [Salesforce DX Developer Guide](https://developer.salesforce.com/docs/atlas.en-us.sfdx_dev.meta/sfdx_dev/sfdx_dev_intro.htm)
-- [Salesforce CLI Command Reference](https://developer.salesforce.com/docs/atlas.en-us.sfdx_cli_reference.meta/sfdx_cli_reference/cli_reference.htm)
+1. Déployez le projet dans votre org Salesforce
+2. Activez les permissions d'onglet dans Setup → Profiles → System Administrator → Tab Settings
+3. Configurez les Remote Site Settings si nécessaire pour les appels API externes
+
+## 📋 Prérequis
+
+- Org Salesforce avec Lightning Experience activé
+- Accès aux composants Lightning Web Components
+- Permissions pour créer des composants personnalisés
+
+## 🔧 Configuration
+
+Le composant utilise la Named Credential `ArcGIS_Services` pour les appels API. Assurez-vous que les paramètres d'authentification sont correctement configurés.
+
+## 📱 Utilisation
+
+Ajoutez le composant `esriMap` à vos pages Lightning ou utilisez la page Visualforce `ArcGISMap` directement.
+
+---
+
+*Développé avec Salesforce DX et Lightning Web Components*
