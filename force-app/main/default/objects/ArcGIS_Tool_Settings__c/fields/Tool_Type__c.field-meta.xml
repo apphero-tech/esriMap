@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Tool_Type__c</fullName>
+    <description>Type technique de l'outil pour l'API ArcGIS (point, polyline, polygon, rectangle, circle)</description>
+    <externalId>false</externalId>
+    <inlineHelpText>Nom technique utilisé par l'API ArcGIS Maps SDK</inlineHelpText>
+    <label>Tool Type</label>
+    <length>50</length>
+    <required>true</required>
+    <trackTrending>false</trackTrending>
+    <type>Text</type>
+    <unique>false</unique>
+</CustomField>

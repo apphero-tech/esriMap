@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomObject xmlns="http://soap.sforce.com/2006/04/metadata">
+    <customSettingsType>List</customSettingsType>
+    <description>Paramétrage des outils ArcGIS. Un enregistrement par outil avec possibilité d'activation/désactivation par les administrateurs.</description>
+    <enableFeeds>false</enableFeeds>
+    <label>ArcGIS Tool Settings</label>
+    <visibility>Public</visibility>
+</CustomObject>

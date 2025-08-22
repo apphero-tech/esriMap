@@ -36,6 +36,11 @@
                 <default>false</default>
                 <label>Circle</label>
             </value>
+            <value>
+                <fullName>Adresse</fullName>
+                <default>false</default>
+                <label>Adresse</label>
+            </value>
         </valueSetDefinition>
     </valueSet>
 </CustomField>

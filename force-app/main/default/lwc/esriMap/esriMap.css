@@ -17,13 +17,27 @@
     min-height: 0;
 }
 
-/* Styles de base pour la carte */
+/* Styles pour la carte */
 .map-container {
+    width: 100%;
+    height: 500px;
     border-radius: 4px;
     overflow: hidden;
-    height: 70vh;
-    min-height: 500px;
-    width: 100%;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Styles pour le bouton Save Shape */
+.save-shape-button {
+    min-width: 120px;
+}
+
+
+
+
+
+/* Assurer que le bouton respecte les espacements SLDS */
+.slds-m-top_medium {
+    margin-top: 1rem;
 }
 
 .formes-panel {
@@ -83,6 +97,8 @@
         justify-content: flex-end;
     }
 }
+
+
 
 /* Ajustements responsives */
 @media (max-width: 768px) {

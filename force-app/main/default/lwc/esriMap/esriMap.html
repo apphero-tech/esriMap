@@ -12,6 +12,25 @@
         <div class="slds-card__body slds-card__body_inner">
             <!-- Conteneur de la carte -->
             <div class="map-container" lwc:dom="manual"></div>
+            
+
+            <!-- Bouton Save Shape -->
+            <div class="slds-m-top_medium slds-text-align_center">
+                <lightning-button 
+                    variant="brand" 
+                    label={saveButtonLabel}
+                    title="Sauvegarder la forme actuellement sélectionnée sur la carte"
+                    disabled={isSaveButtonDisabled}
+                    onclick={handleSaveShape}
+                    class="save-shape-button">
+                    <template if:true={isSaving}>
+                        <lightning-spinner 
+                            alternative-text="Sauvegarde en cours..." 
+                            size="small">
+                        </lightning-spinner>
+                    </template>
+                </lightning-button>
+            </div>
         </div>
     </div>
 </template>
