@@ -14,22 +14,22 @@
     </objectPermissions>
 
     <fieldPermissions>
-        <editable>true</editable>
+        <editable>false</editable>
         <field>Map_Area__c.Geometry_JSON__c</field>
         <readable>true</readable>
     </fieldPermissions>
     <fieldPermissions>
-        <editable>true</editable>
+        <editable>false</editable>
         <field>Map_Area__c.Latitude__c</field>
         <readable>true</readable>
     </fieldPermissions>
     <fieldPermissions>
-        <editable>true</editable>
+        <editable>false</editable>
         <field>Map_Area__c.Longitude__c</field>
         <readable>true</readable>
     </fieldPermissions>
     <fieldPermissions>
-        <editable>true</editable>
+        <editable>false</editable>
         <field>Map_Area__c.Address__c</field>
         <readable>true</readable>
     </fieldPermissions>
