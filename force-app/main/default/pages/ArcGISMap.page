@@ -66,6 +66,20 @@
             .esri-search__suggestion:last-child {
                 border-bottom: none;
             }
+
+            /* Masquer tous les contrôles ArcGIS (lecture seule) sauf Zoom */
+            .esri-ui-corner,
+            .esri-search,
+            .esri-search-*,
+            .esri-compass,
+            .esri-compass-*,
+            .esri-locate,
+            .esri-locate-*,
+            .esri-basemap-toggle,
+            .esri-basemap-toggle-*,
+            .esri-sketch,
+            .esri-sketch-*,
+            .esri-ui-manual-container { display: none !important; }
         </style>
     </head>
     <body>
@@ -128,8 +142,8 @@
                             toggleReadOnlyInterface(true);
                         }
                         
-                        const geometryData = data.geometryData;
-                        const feature = JSON.parse(geometryData);
+                        const geometryData = data.geometry || data.geometryData;
+                        const feature = typeof geometryData === 'string' ? JSON.parse(geometryData) : geometryData;
                         
                         // Effacer les graphiques existants
                         sketchLayer.removeAll();
@@ -163,18 +177,92 @@
                                 console.log('🔍 Feature GeoJSON:', feature);
                         }
                         
+                        // Si latitude/longitude fournies, forcer un point unique centré
+                        if (data && typeof data.latitude === 'number' && typeof data.longitude === 'number') {
+                            const pointGraphic = new Graphic({
+                                geometry: new Point({ longitude: data.longitude, latitude: data.latitude }),
+                                symbol: {
+                                    type: "simple-marker",
+                                    color: [51, 153, 255, 0.8],
+                                    outline: { color: [255, 255, 255, 1], width: 2 },
+                                    size: 12
+                                }
+                            });
+                            sketchLayer.add(pointGraphic);
+                            view.goTo({ target: pointGraphic.geometry, zoom: 16 }, { duration: 600 }).then(() => {
+                                try {
+                                    // Figer la carte (pas de pan) avec un extent autour du point
+                                    if (view && view.constraints) {
+                                        const lon = pointGraphic.geometry.longitude;
+                                        const lat = pointGraphic.geometry.latitude;
+                                        const delta = 0.0002; // env. ~20m, selon SR
+                                        const extent = new Extent({ xmin: lon - delta, ymin: lat - delta, xmax: lon + delta, ymax: lat + delta, spatialReference: { wkid: 4326 } });
+                                        view.constraints = {
+                                            rotationEnabled: false,
+                                            snapToZoom: true,
+                                            geometry: extent
+                                        };
+                                    }
+                                    if (view && view.navigation) {
+                                        // Désactiver zoom molette et pan tactile/ clavier
+                                        view.navigation.mouseWheelZoomEnabled = false;
+                                        view.navigation.browserTouchPanEnabled = false;
+                                        view.navigation.gamepadEnabled = false;
+                                        view.navigation.keyboardEnabled = false;
+                                    }
+                                    view.on("drag", function(evt){ evt.stopPropagation(); });
+                                    view.on("mouse-wheel", function(evt){ evt.stopPropagation(); });
+                                    view.on("double-click", function(evt){ evt.stopPropagation(); });
+                                    view.on("pointer-down", function(evt){ if (window.isReadOnlyMode) evt.stopPropagation(); });
+                                    view.on("immediate-click", function(evt){ evt.stopPropagation(); });
+                                    view.on("pointer-move", function(evt){ evt.stopPropagation(); });
+
+                                    // Ne pas bloquer les raccourcis de zoom du navigateur pour éviter les crashes Chrome
+                                } catch (freezeErr) { console.warn('⚠️ Erreur lors du gel de la carte:', freezeErr); }
+                            });
+                            // Activer l'interface lecture seule
+                            toggleReadOnlyInterface(true);
+                            console.log('✅ Point centré en lecture seule');
+                            return;
+                        }
+
                         if (graphic) {
                             // Ajouter à la carte avec style lecture seule
                             sketchLayer.add(graphic);
                             
                             // Centrer la vue si demandé
-                            if (data.autoCenter) {
+                            if (data && data.autoCenter) {
                                 const extent = graphic.geometry.extent || graphic.geometry;
                                 view.goTo({
                                     target: extent,
                                     zoom: extent.type === 'point' ? 16 : undefined
                                 }).then(() => {
                                     console.log('✅ Vue centrée sur la géométrie');
+                                    try {
+                                        if (view && view.constraints && graphic) {
+                                            const geom = graphic.geometry;
+                                            const extentGeom = geom.extent ? geom.extent : geom;
+                                            view.constraints = {
+                                                rotationEnabled: false,
+                                                snapToZoom: true,
+                                                geometry: extentGeom
+                                            };
+                                        }
+                                        if (view && view.navigation) {
+                                            view.navigation.mouseWheelZoomEnabled = false;
+                                            view.navigation.browserTouchPanEnabled = false;
+                                            view.navigation.gamepadEnabled = false;
+                                            view.navigation.keyboardEnabled = false;
+                                        }
+                                        view.on("drag", function(evt){ evt.stopPropagation(); });
+                                        view.on("mouse-wheel", function(evt){ evt.stopPropagation(); });
+                                        view.on("double-click", function(evt){ evt.stopPropagation(); });
+                                        view.on("pointer-down", function(evt){ if (window.isReadOnlyMode) evt.stopPropagation(); });
+                                        view.on("immediate-click", function(evt){ evt.stopPropagation(); });
+                                        view.on("pointer-move", function(evt){ evt.stopPropagation(); });
+
+                                        // Ne pas installer de hook clavier global pour éviter les crashes
+                                    } catch (freezeErr) { console.warn('⚠️ Erreur lors du gel de la carte:', freezeErr); }
                                 });
                             }
                             
@@ -295,8 +383,15 @@
                     console.log('🔒 Gestion interface mode lecture seule:', isReadOnly);
                     
                     if (isReadOnly) {
-                        // Mode lecture seule : masquer les widgets inutiles
+                        // Mode lecture seule : supprimer les composants UI et widgets
                         console.log('🔒 Suppression des widgets en mode lecture seule');
+                        try { if (typeof view !== 'undefined' && view && view.ui) { view.ui.components = ["zoom"]; } } catch (e) {}
+                        // Retirer explicitement les widgets ajoutés à l'UI (on garde uniquement Zoom via components)
+                        try { if (searchWidget) { view.ui.remove(searchWidget); } } catch (e) {}
+                        try { if (compassWidget) { view.ui.remove(compassWidget); } } catch (e) {}
+                        try { if (locateWidget) { view.ui.remove(locateWidget); } } catch (e) {}
+                        try { if (basemapToggleWidget) { view.ui.remove(basemapToggleWidget); } } catch (e) {}
+                        try { if (window.sketchWidget) { view.ui.remove(window.sketchWidget); } } catch (e) {}
                         
                         // Masquer le widget Search
                         if (searchWidget && searchWidget.container) {
@@ -376,9 +471,11 @@
                 
                 // Écouter les messages du composant LWC pour le mode lecture seule
                 window.addEventListener('message', function(event) {
-                    if (event.data.type === 'DISPLAY_READONLY_GEOMETRY') {
+                    if (event.data && event.data.type === 'DISPLAY_READONLY_GEOMETRY') {
                         console.log('📨 Message reçu du LWC:', event.data);
-                        displayReadOnlyGeometry(event.data);
+                        var payload = (event.data && event.data.data) ? event.data.data : event.data;
+                        try { window.isReadOnlyMode = !!(payload && payload.readOnlyMode); } catch (e) {}
+                        displayReadOnlyGeometry(payload);
                     }
                 });
 
@@ -464,8 +561,13 @@
                     window.sketchConfig = config;
                     console.log('📋 Configuration stockée - création automatique du widget Sketch');
                     
-                    // CRÉER AUTOMATIQUEMENT LE WIDGET SKETCH AVEC LA CONFIGURATION
-                    createAndActivateSketchWidget();
+                    // En lecture seule, ne pas créer/ajouter le widget Sketch
+                    if (!window.isReadOnlyMode) {
+                        // CRÉER AUTOMATIQUEMENT LE WIDGET SKETCH AVEC LA CONFIGURATION
+                        createAndActivateSketchWidget();
+                    } else {
+                        console.log('🔒 Lecture seule active - widget Sketch non créé');
+                    }
                     
                 }).catch(error => {
                     console.error('❌ Erreur lors du chargement de la configuration:', error);
@@ -1025,18 +1127,24 @@
                     console.log('✅ Géolocalisation réussie:', event);
                 });
 
-                // Ajouter le widget Locate à la vue
-                view.ui.add(locateWidget, "bottom-left");
+                // Ajouter les widgets SEULEMENT si mode édition (pas lecture seule)
+                if (!window.isReadOnlyMode) {
+                    // Ajouter le widget Locate à la vue
+                    view.ui.add(locateWidget, "bottom-left");
 
-                // Ajouter les widgets à la vue selon les conventions ArcGIS
-                // Search reste en haut à gauche
-                view.ui.add(searchWidget, { position: "top-left", index: 0 });
-                // Déplacer Zoom et Locate en bas à gauche (Zoom au-dessus)
-                try { view.ui.move("zoom", { position: "bottom-left", index: 0 }); } catch (e) { try { view.ui.move("zoom", "bottom-left"); } catch (ignore) {} }
-                view.ui.add(locateWidget, { position: "bottom-left", index: 1 });
-                view.ui.add(compassWidget, "top-right");   // Compass (navigation)
-                view.ui.add(basemapToggleWidget, "top-right"); // BasemapToggle (changement de fond)
-                view.ui.add(sketchWidget, "bottom-right"); // Sketch (outils de dessin)
+                    // Ajouter les widgets à la vue selon les conventions ArcGIS
+                    // Search reste en haut à gauche
+                    view.ui.add(searchWidget, { position: "top-left", index: 0 });
+                    // Déplacer Zoom et Locate en bas à gauche (Zoom au-dessus)
+                    try { view.ui.move("zoom", { position: "bottom-left", index: 0 }); } catch (e) { try { view.ui.move("zoom", "bottom-left"); } catch (ignore) {} }
+                    view.ui.add(locateWidget, { position: "bottom-left", index: 1 });
+                    view.ui.add(compassWidget, "top-right");   // Compass (navigation)
+                    view.ui.add(basemapToggleWidget, "top-right"); // BasemapToggle (changement de fond)
+                    view.ui.add(sketchWidget, "bottom-right"); // Sketch (outils de dessin)
+                } else {
+                    // En lecture seule, s'assurer que le contrôleur Zoom est visible en bas à droite
+                    try { view.ui.move("zoom", "bottom-right"); } catch (e) {}
+                }
                 // Zoom reste en "bottom-right" par défaut (coexiste avec Sketch)
 
                 console.log('🎯 Widgets ajoutés selon conventions ArcGIS:');
@@ -1159,9 +1267,12 @@
                     }
                 });
                 
-                // HANDLER DE CLIC NATIF ARCGIS - GÉOCODAGE TOUJOURS ACTIF
-                // En mode natif (sans widget Sketch), ce handler fonctionne toujours
+                // HANDLER DE CLIC - DÉSACTIVÉ EN LECTURE SEULE
                 view.on("click", function(event) {
+                    if (window.isReadOnlyMode) {
+                        console.log('🔒 Lecture seule - clic ignoré');
+                        return;
+                    }
                     console.log('🖱️ Clic détecté sur la carte - mode natif ArcGIS');
                     
                     // Si un outil de création Sketch est actif, laisser Sketch gérer
