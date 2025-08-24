@@ -1,0 +1,11 @@
+<template>
+    <div class="map-container">
+        <iframe 
+            src={vfPageUrl} 
+            title="Carte ArcGIS en lecture seule"
+            class="map-iframe"
+            onload={onMapReady}
+            sandbox="allow-scripts allow-same-origin allow-forms">
+        </iframe>
+    </div>
+</template>

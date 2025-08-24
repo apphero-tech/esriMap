@@ -23,6 +23,9 @@
                 font-family: 'Avenir Next', 'Helvetica Neue', Helvetica, Arial, sans-serif;
             }
             
+            /* Espace entre Zoom et Locate lorsqu'ils sont en bas à gauche */
+            .esri-ui-bottom-left .esri-locate { margin-top: 8px; }
+            
             /* Style pour le widget Search */
             .esri-search {
                 width: 300px;
@@ -83,8 +86,10 @@
                 "esri/widgets/BasemapToggle",
                 "esri/widgets/Sketch",
                 "esri/layers/GraphicsLayer",
-                "esri/geometry/geometryEngine"
-            ], function(Map, MapView, Point, Graphic, SimpleMarkerSymbol, PopupTemplate, Popup, Search, Compass, Locate, BasemapToggle, Sketch, GraphicsLayer, geometryEngine) {
+                "esri/geometry/geometryEngine",
+                "esri/geometry/support/webMercatorUtils",
+                "esri/core/reactiveUtils"
+            ], function(Map, MapView, Point, Graphic, SimpleMarkerSymbol, PopupTemplate, Popup, Search, Compass, Locate, BasemapToggle, Sketch, GraphicsLayer, geometryEngine, webMercatorUtils, reactiveUtils) {
                 
                 console.log('🗺️ Initialisation ArcGIS dans Visualforce...');
                 
@@ -99,6 +104,260 @@
                 });
                 map.add(sketchLayer);
                 
+                // Layer pour les formes enregistrées (persistantes le temps de la session)
+                const savedLayer = new GraphicsLayer({
+                    title: "Formes enregistrées"
+                });
+                map.add(savedLayer);
+                
+                // ========================================
+                // FONCTIONNALITÉS MODE LECTURE SEULE
+                // ========================================
+                
+                // Fonction pour afficher une géométrie en mode lecture seule
+                function displayReadOnlyGeometry(data) {
+                    console.log('📍 Affichage géométrie en mode lecture seule:', data);
+                    
+                    try {
+                        // Mettre à jour le mode global
+                        window.isReadOnlyMode = data.readOnlyMode || false;
+                        console.log('🔒 Mode lecture seule activé:', window.isReadOnlyMode);
+                        
+                        // Gérer l'interface en mode lecture seule
+                        if (window.isReadOnlyMode) {
+                            toggleReadOnlyInterface(true);
+                        }
+                        
+                        const geometryData = data.geometryData;
+                        const feature = JSON.parse(geometryData);
+                        
+                        // Effacer les graphiques existants
+                        sketchLayer.removeAll();
+                        
+                        let graphic = null;
+                        
+                        // Créer le graphique selon le type de géométrie
+                        // Utiliser d'abord Area_Type__c du LWC, puis les propriétés GeoJSON
+                        const geometryType = data.areaType || feature.properties.originalType || feature.properties.shapeType;
+                        console.log('🔍 Type de géométrie détecté:', geometryType);
+                        
+                        switch (geometryType) {
+                            case 'Circle':
+                                graphic = createReadOnlyCircleGraphic(feature, data.centerCoordinates);
+                                break;
+                            case 'Point':
+                                graphic = createReadOnlyPointGraphic(feature);
+                                break;
+                            case 'Polygon':
+                                graphic = createReadOnlyPolygonGraphic(feature);
+                                break;
+                            case 'Polyline':
+                                graphic = createReadOnlyPolylineGraphic(feature);
+                                break;
+                            case 'Rectangle':
+                                graphic = createReadOnlyRectangleGraphic(feature);
+                                break;
+                            default:
+                                console.warn('⚠️ Type de géométrie non supporté:', geometryType);
+                                console.log('🔍 Données reçues:', data);
+                                console.log('🔍 Feature GeoJSON:', feature);
+                        }
+                        
+                        if (graphic) {
+                            // Ajouter à la carte avec style lecture seule
+                            sketchLayer.add(graphic);
+                            
+                            // Centrer la vue si demandé
+                            if (data.autoCenter) {
+                                const extent = graphic.geometry.extent || graphic.geometry;
+                                view.goTo({
+                                    target: extent,
+                                    zoom: extent.type === 'point' ? 16 : undefined
+                                }).then(() => {
+                                    console.log('✅ Vue centrée sur la géométrie');
+                                });
+                            }
+                            
+                            // Désactiver les outils de dessin en mode lecture seule
+                            if (window.sketchWidget) {
+                                window.sketchWidget.cancel();
+                                window.sketchWidget.view = null; // Désactiver complètement
+                            }
+                            
+                            console.log('✅ Géométrie affichée en mode lecture seule');
+                        }
+                        
+                    } catch (error) {
+                        console.error('❌ Erreur affichage géométrie lecture seule:', error);
+                    }
+                }
+                
+                // Fonction pour créer un cercle en lecture seule
+                function createReadOnlyCircleGraphic(feature, centerCoordinates) {
+                    const radius = feature.properties.radius;
+                    let center;
+                    
+                    // Utiliser les coordonnées du centre si disponibles
+                    if (centerCoordinates && centerCoordinates.latitude && centerCoordinates.longitude) {
+                        center = [centerCoordinates.longitude, centerCoordinates.latitude];
+                    } else if (feature.geometry.coordinates && feature.geometry.coordinates[0] && feature.geometry.coordinates[1]) {
+                        center = feature.geometry.coordinates;
+                    } else {
+                        console.warn('⚠️ Coordonnées du centre manquantes pour le cercle');
+                        return null;
+                    }
+                    
+                    // Créer le cercle
+                    const circle = new geometryEngine.geodesicBuffer(
+                        new Point({
+                            longitude: center[0],
+                            latitude: center[1]
+                        }),
+                        radius,
+                        'meters'
+                    );
+                    
+                    return new Graphic({
+                        geometry: circle,
+                        symbol: {
+                            type: "simple-fill",
+                            color: [51, 153, 255, 0.3], // Bleu clair transparent
+                            outline: {
+                                color: [51, 153, 255, 0.8], // Bleu plus foncé
+                                width: 2
+                            }
+                        }
+                    });
+                }
+                
+                // Fonction pour créer un point en lecture seule
+                function createReadOnlyPointGraphic(feature) {
+                    const coords = feature.geometry.coordinates;
+                    
+                    return new Graphic({
+                        geometry: new Point({
+                            longitude: coords[0],
+                            latitude: coords[1]
+                        }),
+                        symbol: {
+                            type: "simple-marker",
+                            color: [51, 153, 255, 0.8],
+                            outline: {
+                                color: [51, 153, 255, 1],
+                                width: 2
+                            },
+                            size: 12
+                        }
+                    });
+                }
+                
+                // Fonction pour créer un polygone en lecture seule
+                function createReadOnlyPolygonGraphic(feature) {
+                    return new Graphic({
+                        geometry: {
+                            type: "polygon",
+                            rings: feature.geometry.coordinates
+                        },
+                        symbol: {
+                            type: "simple-fill",
+                            color: [51, 153, 255, 0.3],
+                            outline: {
+                                color: [51, 153, 255, 0.8],
+                                width: 2
+                            }
+                        }
+                    });
+                }
+                
+                // Fonction pour créer une polyligne en lecture seule
+                function createReadOnlyPolylineGraphic(feature) {
+                    return new Graphic({
+                        geometry: {
+                            type: "polyline",
+                            paths: feature.geometry.coordinates
+                        },
+                        symbol: {
+                            type: "simple-line",
+                            color: [51, 153, 255, 0.8],
+                            width: 3
+                        }
+                    });
+                }
+                
+                // Fonction pour créer un rectangle en lecture seule
+                function createReadOnlyRectangleGraphic(feature) {
+                    // Les rectangles sont stockés comme des polygones
+                    return createReadOnlyPolygonGraphic(feature);
+                }
+                
+                // Fonction pour gérer l'interface en mode lecture seule
+                function toggleReadOnlyInterface(isReadOnly) {
+                    console.log('🔒 Gestion interface mode lecture seule:', isReadOnly);
+                    
+                    if (isReadOnly) {
+                        // Mode lecture seule : masquer les widgets inutiles
+                        console.log('🔒 Suppression des widgets en mode lecture seule');
+                        
+                        // Masquer le widget Search
+                        if (searchWidget && searchWidget.container) {
+                            searchWidget.container.style.display = 'none';
+                        }
+                        
+                        // Masquer le widget Compass
+                        if (compassWidget && compassWidget.container) {
+                            compassWidget.container.style.display = 'none';
+                        }
+                        
+                        // Masquer le widget Locate
+                        if (locateWidget && locateWidget.container) {
+                            locateWidget.container.style.display = 'none';
+                        }
+                        
+                        // Masquer le widget BasemapToggle
+                        if (basemapToggleWidget && basemapToggleWidget.container) {
+                            basemapToggleWidget.container.style.display = 'none';
+                        }
+                        
+                        // Masquer le widget Sketch
+                        if (window.sketchWidget && window.sketchWidget.container) {
+                            window.sketchWidget.container.style.display = 'none';
+                        }
+                        
+                        console.log('✅ Widgets masqués en mode lecture seule');
+                        
+                    } else {
+                        // Mode édition : afficher tous les widgets
+                        console.log('✏️ Affichage des widgets en mode édition');
+                        
+                        // Afficher le widget Search
+                        if (searchWidget && searchWidget.container) {
+                            searchWidget.container.style.display = 'block';
+                        }
+                        
+                        // Afficher le widget Compass
+                        if (compassWidget && compassWidget.container) {
+                            compassWidget.container.style.display = 'block';
+                        }
+                        
+                        // Afficher le widget Locate
+                        if (locateWidget && locateWidget.container) {
+                            locateWidget.container.style.display = 'block';
+                        }
+                        
+                        // Afficher le widget BasemapToggle
+                        if (basemapToggleWidget && basemapToggleWidget.container) {
+                            basemapToggleWidget.container.style.display = 'block';
+                        }
+                        
+                        // Afficher le widget Sketch
+                        if (window.sketchWidget && window.sketchWidget.container) {
+                            window.sketchWidget.container.style.display = 'block';
+                        }
+                        
+                        console.log('✅ Widgets affichés en mode édition');
+                    }
+                }
+                
                 // Créer la vue
                 const view = new MapView({
                     container: "viewDiv",
@@ -108,6 +367,18 @@
                     constraints: {
                         rotationEnabled: true, // Activer la rotation pour le Compass
                         rotationAngle: 0 // Commencer avec l'orientation nord
+                    }
+                });
+                
+                // ========================================
+                // ÉCOUTEUR DE MESSAGES POUR MODE LECTURE SEULE
+                // ========================================
+                
+                // Écouter les messages du composant LWC pour le mode lecture seule
+                window.addEventListener('message', function(event) {
+                    if (event.data.type === 'DISPLAY_READONLY_GEOMETRY') {
+                        console.log('📨 Message reçu du LWC:', event.data);
+                        displayReadOnlyGeometry(event.data);
                     }
                 });
 
@@ -132,6 +403,9 @@
                     resultGraphicEnabled: false, // On gère nos propres graphics
                     container: "searchContainer"
                 });
+                
+                // Variable globale pour le mode lecture seule
+                window.isReadOnlyMode = false;
 
                 // Créer et configurer le widget Compass (navigation)
                 const compassWidget = new Compass({
@@ -140,7 +414,7 @@
                 });
 
                 // Écouter les changements de rotation pour informer l'utilisateur
-                view.watch("rotation", function(rotation) {
+                reactiveUtils.watch(() => view.rotation, function(rotation) {
                     if (Math.abs(rotation) > 1) { // Si rotation significative
                         console.log('🧭 Carte tournée de', rotation.toFixed(1), 'degrés');
                         console.log('💡 Cliquez sur le compass pour remettre au nord');
@@ -325,7 +599,6 @@
                     view: view,
                     layer: sketchLayer,
                         creationMode: "hybrid",
-                        defaultCreateOptions: { mode: "click" },
                         defaultUpdateOptions: { 
                             enableRotation: false,
                             enableScaling: false,
@@ -351,6 +624,26 @@
 
                     // Stocker globalement
                     window.sketchWidget = sketchWidget;
+                    
+                    // Suivre l'état d'activation d'un outil de création
+                    window.isSketchCreateMode = false;
+                    reactiveUtils.watch(() => sketchWidget.activeTool, function(newTool){
+                        window.isSketchCreateMode = !!newTool;
+                        console.log('🛠️ activeTool changé:', newTool, 'createMode =', window.isSketchCreateMode);
+                        if (view && view.popup) {
+                            if (window.isSketchCreateMode) {
+                                // Fermer et désactiver l'auto-ouverture du popup pour ne pas gêner le dessin
+                                if (typeof view.popup.close === 'function') {
+                                    view.popup.close();
+                                } else {
+                                    view.popup.visible = false;
+                                }
+                                view.popup.autoOpenEnabled = false;
+                            } else {
+                                view.popup.autoOpenEnabled = true;
+                            }
+                        }
+                    });
                     
                     // AJOUTER LE WIDGET À LA VUE (c'est ce qui manquait !)
                     view.ui.add(sketchWidget, "bottom-right");
@@ -389,7 +682,7 @@
                         // ÉTAT INITIAL: FORCÉ EN MODE INACTIF POUR GÉOCODAGE
                         // Annuler tous les outils actifs et désactiver le widget par défaut
                         sketchWidget.cancel(); // Annule tout outil de création actif
-                        sketchWidget.viewModel.state = "ready"; // Force l'état ready
+                        // sketchWidget.viewModel.state = "ready"; // Force l'état ready (retiré car non assignable)
                         
                         console.log('🖱️ Widget Sketch en mode READY - géocodage disponible');
                         console.log('🔧 État du widget:', sketchWidget.viewModel.state);
@@ -401,21 +694,25 @@
                     sketchWidget.on("create", function(event) {
                         console.log('🎨 Forme créée:', event);
                         if (event.state === "complete") {
-                            handleShapeCreated(event.graphic);
+                            handleShapeCreated(event.graphic, event.tool);
                         }
                     });
                     
                     // Écouter la sélection de formes
                     sketchWidget.on("select", function(event) {
                         console.log('🎯 Forme sélectionnée:', event);
-                        handleShapeSelection();
+                        if (event.graphics && event.graphics.length > 0) {
+                            console.log('✅ Forme sélectionnée, envoi SHAPE_SELECTED');
+                            handleShapeCreated(event.graphics[0]);
+                        }
                     });
                     
                     // Écouter la désélection de formes
                     sketchWidget.on("update", function(event) {
                         console.log('🔄 Forme mise à jour:', event);
-                        if (event.state === "complete") {
-                            handleShapeCreated(event.graphics[0]);
+                        if (event.state === "complete" && event.graphics && event.graphics.length > 0) {
+                            console.log('✅ Forme mise à jour, envoi SHAPE_SELECTED');
+                            handleShapeCreated(event.graphics[0], undefined);
                         }
                     });
                     
@@ -424,10 +721,19 @@
                         console.log('🗑️ Forme supprimée:', event);
                         handleShapeDeletion();
                     });
+                    
+                    // Écouter les changements d'état pour activer le bouton Save
+                    sketchWidget.viewModel.on("create", function(event) {
+                        console.log('🎨 Création en cours:', event);
+                        if (event.state === "complete") {
+                            console.log('✅ Création terminée, envoi SHAPE_SELECTED');
+                            handleShapeCreated(event.graphic);
+                        }
+                    });
                         
                         // IMPORTANT: Préserver le géocodage sur clic de carte
                         // Écouter les changements d'outil pour maintenir le géocodage actif
-                        sketchWidget.viewModel.watch("state", function(newState) {
+                        reactiveUtils.watch(() => sketchWidget.viewModel.state, function(newState) {
                             console.log('🔧 État du widget Sketch changé:', newState);
                             
                             // Si aucun outil de création n'est actif, le géocodage reste disponible
@@ -440,19 +746,27 @@
                     
                     // Rendre le sketchWidget disponible globalement pour les autres fonctions
                     window.sketchWidget = sketchWidget;
+                    
+                    // Vérifier s'il y a des formes existantes pour activer le bouton Save
+                    setTimeout(() => {
+                        activateSaveButtonIfShapesExist();
+                    }, 1000);
                 }
                 
                 // Fonction pour gérer la création d'une forme
-                function handleShapeCreated(graphic) {
+                function handleShapeCreated(graphic, tool) {
                     console.log('🎨 Nouvelle forme créée:', graphic);
                     
                     // Notifier le LWC qu'une forme est disponible
                     if (window.parent) {
                         window.parent.postMessage({
                             type: 'SHAPE_SELECTED',
-                            shape: extractShapeInfo(graphic)
+                            shape: extractShapeInfo(graphic, tool)
                         }, '*');
                     }
+                    
+                    // Activer le bouton Save si des formes sont présentes
+                    activateSaveButtonIfShapesExist();
                 }
                 
                 // Fonction pour gérer la sélection de formes
@@ -490,14 +804,45 @@
                                 type: 'NO_SHAPE_SELECTED'
                             }, '*');
                         }
+                    } else {
+                        // Activer le bouton Save si des formes restent
+                        activateSaveButtonIfShapesExist();
+                    }
+                }
+                
+                // Fonction pour activer le bouton Save si des formes existent
+                function activateSaveButtonIfShapesExist() {
+                    if (sketchWidget && sketchWidget.view) {
+                        const graphics = sketchWidget.view.graphics.filter(g => g.geometry);
+                        if (graphics.length > 0) {
+                            console.log('✅ Formes présentes sur la carte, activation du bouton Save');
+                            if (window.parent) {
+                                window.parent.postMessage({
+                                    type: 'SHAPE_SELECTED',
+                                    shape: extractShapeInfo(graphics[0])
+                                }, '*');
+                            }
+                        }
                     }
                 }
                 
 
                 
                 // Fonction pour extraire les informations d'une forme
-                function extractShapeInfo(graphic) {
+                function extractShapeInfo(graphic, tool) {
+                    if (!graphic) {
+                        console.error('❌ Graphic est null ou undefined');
+                        throw new Error('Graphic invalide');
+                    }
+                    
+                    if (!graphic.geometry) {
+                        console.error('❌ Geometry est null ou undefined dans le graphic:', graphic);
+                        throw new Error('Géométrie invalide');
+                    }
+                    
                     const geometry = graphic.geometry;
+                    console.log('🔍 Géométrie à extraire:', geometry);
+                    
                     let shapeInfo = {
                         type: 'unknown',
                         coordinates: [],
@@ -509,7 +854,6 @@
                     // Récupérer l'adresse si disponible
                     if (graphic.attributes && graphic.attributes.address) {
                         const address = graphic.attributes.address;
-                        // Ne pas inclure les messages d'erreur comme adresse
                         if (address && address !== "Géocodage en cours..." && 
                             address !== "Adresse non trouvée" && 
                             address !== "Erreur de géocodage") {
@@ -531,7 +875,7 @@
                             longitude: wgs84Geometry.longitude
                         };
                     } else if (wgs84Geometry.type === 'polyline') {
-                        shapeInfo.type = 'Line'; // Corriger pour correspondre aux valeurs picklist
+                        shapeInfo.type = 'Polyline';
                         shapeInfo.coordinates = wgs84Geometry.paths[0].map(coord => ({
                             latitude: coord[1],
                             longitude: coord[0]
@@ -556,11 +900,30 @@
                         } else {
                             shapeInfo.type = 'Rectangle';
                         }
+                        const xmin = wgs84Geometry.xmin;
+                        const ymin = wgs84Geometry.ymin;
+                        const xmax = wgs84Geometry.xmax;
+                        const ymax = wgs84Geometry.ymax;
                         shapeInfo.coordinates = [
-                            { latitude: wgs84Geometry.ymin, longitude: wgs84Geometry.xmin },
-                            { latitude: wgs84Geometry.ymax, longitude: wgs84Geometry.xmax }
+                            { latitude: ymin, longitude: xmin },
+                            { latitude: ymin, longitude: xmax },
+                            { latitude: ymax, longitude: xmax },
+                            { latitude: ymax, longitude: xmin },
+                            { latitude: ymin, longitude: xmin }
                         ];
                         shapeInfo.center = wgs84Geometry.center;
+                    }
+                    
+                    // Si l'outil est connu, forcer le type attendu plateforme
+                    if (tool) {
+                        const toolMap = { point: 'Point', polyline: 'Polyline', polygon: 'Polygon', rectangle: 'Rectangle', circle: 'Circle' };
+                        const mapped = toolMap[tool];
+                        if (mapped) {
+                            shapeInfo.type = mapped;
+                            if (mapped === 'Circle') {
+                                shapeInfo.isCircle = true;
+                            }
+                        }
                     }
                     
                     return shapeInfo;
@@ -573,43 +936,22 @@
                         return geometry;
                     }
                     
-                    // Si pas de spatialReference ou différent de 4326, convertir
                     try {
-                        // Utiliser l'API ArcGIS pour la projection
-                        if (geometry.spatialReference && geometry.spatialReference.wkid) {
-                            console.log('🔄 Conversion de la géométrie vers WGS84 depuis SR:', geometry.spatialReference.wkid);
-                            
-                            // Créer un Point temporaire pour tester la projection
-                            const testPoint = new Point({
-                                x: geometry.type === 'point' ? geometry.x : geometry.extent ? geometry.extent.center.x : 0,
-                                y: geometry.type === 'point' ? geometry.y : geometry.extent ? geometry.extent.center.y : 0,
-                                spatialReference: geometry.spatialReference
-                            });
-                            
-                            // Projeter vers WGS84
-                            const projectedPoint = geometryEngine.project(testPoint, { wkid: 4326 });
-                            
-                            if (projectedPoint) {
-                                console.log('✅ Projection réussie vers WGS84:', projectedPoint);
-                                // La géométrie complète sera projetée automatiquement par ArcGIS
-                                return geometryEngine.project(geometry, { wkid: 4326 });
+                        // Gérer le cas WebMercator standard (102100/3857)
+                        const wkid = geometry.spatialReference && geometry.spatialReference.wkid;
+                        if (wkid === 102100 || wkid === 3857) {
+                            const converted = webMercatorUtils.webMercatorToGeographic(geometry);
+                            if (converted) {
+                                return converted;
                             }
                         }
                         
-                        // Fallback : utiliser la projection de la vue
-                        if (view.spatialReference && view.spatialReference.wkid !== 4326) {
-                            console.log('🔄 Projection via la vue depuis SR:', view.spatialReference.wkid);
-                            return geometryEngine.project(geometry, { wkid: 4326 });
-                        }
-                        
-                        // Si on arrive ici, on considère que c'est déjà en WGS84
-                        console.log('ℹ️ Géométrie considérée comme WGS84 par défaut');
+                        // Si non convertible, retourner tel quel
+                        console.warn('⚠️ Conversion WGS84 non appliquée, WKID:', wkid);
                         return geometry;
-                        
-                    } catch (error) {
-                        console.error('❌ Erreur lors de la projection vers WGS84:', error);
-                        // En cas d'erreur, retourner la géométrie originale
-                        return geometry;
+                    } catch (e) {
+                        console.error('❌ Erreur conversion WGS84:', e);
+                        return geometry; // Fallback sans conversion
                     }
                 }
                 
@@ -687,10 +1029,13 @@
                 view.ui.add(locateWidget, "bottom-left");
 
                 // Ajouter les widgets à la vue selon les conventions ArcGIS
-                view.ui.add(searchWidget, "top-left");      // Recherche (déjà implémenté)
+                // Search reste en haut à gauche
+                view.ui.add(searchWidget, { position: "top-left", index: 0 });
+                // Déplacer Zoom et Locate en bas à gauche (Zoom au-dessus)
+                try { view.ui.move("zoom", { position: "bottom-left", index: 0 }); } catch (e) { try { view.ui.move("zoom", "bottom-left"); } catch (ignore) {} }
+                view.ui.add(locateWidget, { position: "bottom-left", index: 1 });
                 view.ui.add(compassWidget, "top-right");   // Compass (navigation)
                 view.ui.add(basemapToggleWidget, "top-right"); // BasemapToggle (changement de fond)
-                view.ui.add(locateWidget, "bottom-left");  // Locate (géolocalisation)
                 view.ui.add(sketchWidget, "bottom-right"); // Sketch (outils de dessin)
                 // Zoom reste en "bottom-right" par défaut (coexiste avec Sketch)
 
@@ -819,10 +1164,31 @@
                 view.on("click", function(event) {
                     console.log('🖱️ Clic détecté sur la carte - mode natif ArcGIS');
                     
-                    // Si le widget Sketch existe et est actif, ne pas interférer
-                    if (window.sketchWidget && window.sketchWidget.viewModel.state !== "ready" && window.sketchWidget.viewModel.state !== "disabled") {
-                        console.log('🎨 Widget Sketch actif - géocodage suspendu');
+                    // Si un outil de création Sketch est actif, laisser Sketch gérer
+                    if (window.isSketchCreateMode) {
+                        console.log('🎨 Mode création Sketch activé - géocodage suspendu');
+                        return;
+                    }
+                    
+                    // Si le popup auto est désactivé (mode dessin), ne pas géocoder
+                    if (view && view.popup && view.popup.autoOpenEnabled === false) {
+                        console.log('🛑 Popup désactivé pour dessin - clic ignoré');
+                        return;
+                    }
+                    
+                    // Si le widget Sketch existe et qu'un outil de création est sélectionné, ne pas interférer
+                    if (window.sketchWidget) {
+                        const vm = window.sketchWidget.viewModel || {};
+                        const activeTool = window.sketchWidget.activeTool || vm.activeTool;
+                        const state = vm.state;
+                        if (activeTool) {
+                            console.log('🎨 Outil Sketch actif (', activeTool, ') - géocodage suspendu');
                         return; // Laisser le widget Sketch gérer le clic
+                        }
+                        if (state !== "ready" && state !== "disabled") {
+                            console.log('🎨 Widget Sketch actif (state:', state, ') - géocodage suspendu');
+                            return;
+                        }
                     }
                     
                     console.log('✅ Mode navigation natif - géocodage sur clic activé');
@@ -952,6 +1318,25 @@
                                     }, '*');
                                     
                                     console.log('📨 Message ADDRESS_SELECTED envoyé au parent LWC avec adresse:', address);
+                                    
+                                    // ENVOYER AUSSI SHAPE_SELECTED pour activer le bouton Save
+                                    window.parent.postMessage({
+                                        type: 'SHAPE_SELECTED',
+                                        shape: {
+                                            type: 'Point',
+                                            coordinates: [{
+                                                latitude: parseFloat(graphic.attributes.latitude),
+                                                longitude: parseFloat(graphic.attributes.longitude)
+                                            }],
+                                            center: {
+                                                latitude: parseFloat(graphic.attributes.latitude),
+                                                longitude: parseFloat(graphic.attributes.longitude)
+                                            },
+                                            address: address,
+                                            isAddress: true
+                                        }
+                                    }, '*');
+                                    console.log('📨 Message SHAPE_SELECTED envoyé pour activer le bouton Save');
                                 }
                             } else {
                                 console.log('⚠️ Aucune adresse trouvée');
@@ -977,6 +1362,25 @@
                                     }, '*');
                                     
                                     console.log('📨 Message ADDRESS_SELECTED envoyé au parent LWC (sans adresse)');
+                                    
+                                    // ENVOYER AUSSI SHAPE_SELECTED pour activer le bouton Save
+                                    window.parent.postMessage({
+                                        type: 'SHAPE_SELECTED',
+                                        shape: {
+                                            type: 'Point',
+                                            coordinates: [{
+                                                latitude: parseFloat(graphic.attributes.latitude),
+                                                longitude: parseFloat(graphic.attributes.longitude)
+                                            }],
+                                            center: {
+                                                latitude: parseFloat(graphic.attributes.latitude),
+                                                longitude: parseFloat(graphic.attributes.longitude)
+                                            },
+                                            address: "Adresse non trouvée",
+                                            isAddress: true
+                                        }
+                                    }, '*');
+                                    console.log('📨 Message SHAPE_SELECTED envoyé pour activer le bouton Save (sans adresse)');
                                 }
                                 
                                 // Ouvrir popup avec message d'erreur
@@ -1031,6 +1435,191 @@
                     return parts.length > 0 ? parts.join(', ') : 'Adresse non disponible';
                 }
                 
+                // Fonction pour sauvegarder une forme
+                function handleSaveShape(data) {
+                    console.log('💾 Début de la sauvegarde de forme');
+                    
+                    try {
+                        // Récupérer toutes les formes disponibles (sketch + géocodage)
+                        let graphics = [];
+                        
+                        // 1. Vérifier les graphiques du sketch widget
+                        if (sketchWidget && sketchWidget.view && sketchWidget.view.graphics) {
+                            const sketchGraphics = sketchWidget.view.graphics.filter(g => g.geometry);
+                            graphics = graphics.concat(sketchGraphics.toArray());
+                            console.log('📊 Graphiques sketch trouvés:', sketchGraphics.length);
+                        }
+                        
+                        // 2. Vérifier les graphiques de la vue principale (géocodage)
+                        if (view && view.graphics) {
+                            const viewGraphics = view.graphics.filter(g => g.geometry);
+                            graphics = graphics.concat(viewGraphics.toArray());
+                            console.log('📊 Graphiques view trouvés:', viewGraphics.length);
+                        }
+                        
+                        // 3. Vérifier le sketch layer
+                        if (sketchLayer && sketchLayer.graphics) {
+                            const layerGraphics = sketchLayer.graphics.filter(g => g.geometry);
+                            graphics = graphics.concat(layerGraphics.toArray());
+                            console.log('📊 Graphiques layer trouvés:', layerGraphics.length);
+                        }
+                        
+                        console.log('📊 Total graphiques trouvés:', graphics.length);
+                        
+                        if (graphics.length === 0) {
+                            console.warn('⚠️ Aucune forme à sauvegarder');
+                            notifyParent('SAVE_ERROR', { error: 'Aucune forme à sauvegarder' });
+                            return;
+                        }
+                        
+                        // Prendre la dernière forme créée
+                        const graphic = graphics[graphics.length - 1];
+                        console.log('🎯 Graphic sélectionné pour sauvegarde:', graphic);
+                        
+                        if (!graphic || !graphic.geometry) {
+                            console.error('❌ Graphic invalide ou sans géométrie');
+                            notifyParent('SAVE_ERROR', { error: 'Forme invalide' });
+                            return;
+                        }
+                        
+                        const shapeInfo = extractShapeInfo(graphic);
+                        
+                        console.log('📊 Informations de la forme à sauvegarder:', shapeInfo);
+                        
+                        // Préparer les données pour l'Apex
+                        const mapAreaData = {
+                            Area_Type__c: shapeInfo.type,
+                            Geometry_JSON__c: JSON.stringify(convertToGeoJSON(shapeInfo)),
+                            Latitude__c: shapeInfo.center ? shapeInfo.center.latitude : null,
+                            Longitude__c: shapeInfo.center ? shapeInfo.center.longitude : null,
+                            Address__c: shapeInfo.address || null
+                        };
+                        
+                        console.log('📤 Données à envoyer à Apex:', mapAreaData);
+                        
+                        // Appeler l'Apex via Remoting
+                        saveMapAreaRemote(mapAreaData, data.champRelation, data.idParent);
+                        
+                    } catch (error) {
+                        console.error('❌ Erreur lors de la préparation de sauvegarde:', error);
+                        notifyParent('SAVE_ERROR', { error: error.message });
+                    }
+                }
+                
+                // Fonction pour effacer la forme courante
+                function clearCurrentShape() {
+                    if (sketchWidget) {
+                        sketchWidget.cancel();
+                        const graphics = sketchWidget.view.graphics.filter(g => g.geometry);
+                        if (graphics.length > 0) {
+                            sketchWidget.view.graphics.remove(graphics[graphics.length - 1]);
+                        }
+                        notifyParent('NO_SHAPE_SELECTED');
+                    }
+                }
+                
+                // Fonction pour effacer toutes les formes
+                function clearAllShapes() {
+                    if (sketchWidget) {
+                        sketchWidget.cancel();
+                        // Nettoyer les graphiques de la vue principale
+                        if (view && view.graphics) {
+                            view.graphics.removeAll();
+                        }
+                        // Nettoyer le layer de sketch (mais pas savedLayer)
+                        sketchLayer.removeAll();
+                        // Fermer tout popup ouvert
+                        if (view && view.popup) {
+                            if (typeof view.popup.close === 'function') { view.popup.close(); } else { view.popup.visible = false; }
+                        }
+                        
+                        notifyParent('NO_SHAPE_SELECTED');
+                    }
+                }
+                
+                // generateMapAreaName n'est plus utilisé (Name standard auto)
+                
+                // Fonction pour convertir en GeoJSON
+                function convertToGeoJSON(shapeInfo) {
+                    if (shapeInfo.type === 'Point') {
+                        return {
+                            type: "Feature",
+                            geometry: {
+                                type: 'Point',
+                                coordinates: [shapeInfo.coordinates[0].longitude, shapeInfo.coordinates[0].latitude]
+                            },
+                            properties: {
+                                originalType: shapeInfo.type,
+                                address: shapeInfo.address,
+                                isCircle: shapeInfo.isCircle || false
+                            }
+                        };
+                    } else if (shapeInfo.type === 'Polyline') {
+                        return {
+                            type: "Feature",
+                            geometry: {
+                                type: 'LineString',
+                                coordinates: shapeInfo.coordinates.map(c => [c.longitude, c.latitude])
+                            },
+                            properties: {
+                                originalType: shapeInfo.type,
+                                address: shapeInfo.address,
+                                isCircle: false
+                            }
+                        };
+                    } else {
+                        // Polygon / Rectangle (anneau unique)
+                        return {
+                            type: "Feature",
+                            geometry: {
+                                type: 'Polygon',
+                                coordinates: [shapeInfo.coordinates.map(c => [c.longitude, c.latitude])]
+                            },
+                            properties: {
+                                originalType: shapeInfo.type,
+                                address: shapeInfo.address,
+                                isCircle: shapeInfo.isCircle || false
+                            }
+                        };
+                    }
+                }
+                
+                // Fonction pour notifier le parent LWC
+                function notifyParent(type, data = {}) {
+                    if (window.parent) {
+                        window.parent.postMessage({ type, data }, '*');
+                    }
+                }
+                
+                // Fonction Apex Remoting pour sauvegarder
+                function saveMapAreaRemote(mapAreaData, champRelation, idParent) {
+                    console.log('🚀 Préparation des données de sauvegarde (renvoi au LWC)');
+
+                    try {
+                        // Construire le payload ShapeData attendu par l'Apex LWC
+                        const shapeData = {
+                            areaType: mapAreaData.Area_Type__c,
+                            geoJson: mapAreaData.Geometry_JSON__c,
+                            latitude: mapAreaData.Latitude__c,
+                            longitude: mapAreaData.Longitude__c,
+                            address: mapAreaData.Address__c
+                        };
+
+                        console.log('📋 ShapeData renvoyé au LWC:', shapeData);
+
+                        // Notifier le parent (LWC) pour qu'il appelle l'Apex
+                        if (window.parent) {
+                            window.parent.postMessage({
+                                type: 'SHAPE_DATA',
+                                data: { shapeData }
+                            }, '*');
+                        }
+                    } catch (error) {
+                        console.error('❌ Erreur lors de la préparation des données de sauvegarde:', error);
+                        notifyParent('SAVE_ERROR', { error: error.message || 'Erreur de préparation des données' });
+                    }
+                }
+                
                 // Écouter les messages du parent (LWC)
                 window.addEventListener('message', function(event) {
                     console.log('📨 Message reçu du LWC:', event.data);
@@ -1040,6 +1629,17 @@
                         if (event.data.zoom) {
                             view.zoom = event.data.zoom;
                         }
+                    } else if (event.data.type === 'DISPLAY_SAVED_SHAPE') {
+                        displaySavedShape(event.data);
+                    } else if (event.data.type === 'SAVE_SHAPE') {
+                        console.log('💾 Demande de sauvegarde reçue');
+                        handleSaveShape(event.data.data);
+                    } else if (event.data.type === 'CLEAR_SHAPE') {
+                        console.log('🧹 Demande d\'effacement de forme');
+                        clearCurrentShape();
+                    } else if (event.data.type === 'CLEAR_ALL') {
+                        console.log('🧹 Demande d\'effacement total');
+                        clearAllShapes();
                     } else if (event.data.type === 'GEOCODE_REQUEST') {
                         console.log('🌍 Demande de géocodage reçue:', event.data.coordinates);
                         
@@ -1378,7 +1978,213 @@
                     
                     console.log('🎨 Styles de highlight appliqués');
                 }
+
+                // Afficher une forme sauvegardée dans le layer dédié et la mettre en évidence
+                function displaySavedShape(data) {
+                    try {
+                        const geometryData = data.geometryData; // GeoJSON string
+                        const feature = typeof geometryData === 'string' ? JSON.parse(geometryData) : geometryData;
+                        const areaType = data.areaType;
+                        
+                        // Créer le graphic selon type
+                        let graphic = null;
+                        switch (areaType) {
+                            case 'Point':
+                                graphic = createReadOnlyPointGraphic(feature);
+                                break;
+                            case 'Polyline':
+                                graphic = createReadOnlyPolylineGraphic(feature);
+                                break;
+                            case 'Polygon':
+                            case 'Rectangle':
+                            case 'Circle':
+                                graphic = createReadOnlyPolygonGraphic(feature);
+                                break;
+                        }
+                        if (!graphic) return;
+                        
+                        // Option: style de mise en évidence
+                        if (graphic.symbol && graphic.symbol.outline) {
+                            graphic.symbol.outline.width = 3;
+                        }
+                        
+                        // Ajouter/mettre en avant
+                        savedLayer.add(graphic);
+                        
+                        // Centrer la vue
+                        if (data.autoCenter) {
+                            const extent = graphic.geometry.extent || graphic.geometry;
+                            view.goTo({ target: extent, zoom: extent.type === 'point' ? 16 : undefined });
+                        }
+                    } catch (e) {
+                        console.error('❌ Erreur displaySavedShape:', e);
+                    }
+                }
             });
+            
+
+            
+            // Fonction pour afficher une géométrie en mode lecture seule
+            function displayReadOnlyGeometry(data) {
+                console.log('📍 Affichage géométrie en mode lecture seule:', data);
+                
+                try {
+                    const geometryData = data.geometryData;
+                    const feature = JSON.parse(geometryData);
+                    
+                    // Effacer les graphiques existants
+                    sketchLayer.removeAll();
+                    
+                    let graphic = null;
+                    
+                    // Créer le graphique selon le type de géométrie
+                    switch (feature.properties.originalType || feature.properties.shapeType) {
+                        case 'Circle':
+                            graphic = createReadOnlyCircleGraphic(feature, data.centerCoordinates);
+                            break;
+                        case 'Point':
+                            graphic = createReadOnlyPointGraphic(feature);
+                            break;
+                        case 'Polygon':
+                            graphic = createReadOnlyPolygonGraphic(feature);
+                            break;
+                        case 'Polyline':
+                            graphic = createReadOnlyPolylineGraphic(feature);
+                            break;
+                        case 'Rectangle':
+                            graphic = createReadOnlyRectangleGraphic(feature);
+                            break;
+                        default:
+                            console.warn('⚠️ Type de géométrie non supporté:', feature.properties.originalType);
+                    }
+                    
+                    if (graphic) {
+                        // Ajouter à la carte avec style lecture seule
+                        sketchLayer.add(graphic);
+                        
+                        // Centrer la vue si demandé
+                        if (data.autoCenter) {
+                            const extent = graphic.geometry.extent || graphic.geometry;
+                            view.goTo({
+                                target: extent,
+                                zoom: extent.type === 'point' ? 16 : undefined
+                            }).then(() => {
+                                console.log('✅ Vue centrée sur la géométrie');
+                            });
+                        }
+                        
+                        // Désactiver les outils de dessin en mode lecture seule
+                        if (window.sketchWidget) {
+                            window.sketchWidget.cancel();
+                            window.sketchWidget.view = null; // Désactiver complètement
+                        }
+                        
+                        console.log('✅ Géométrie affichée en mode lecture seule');
+                    }
+                    
+                } catch (error) {
+                    console.error('❌ Erreur affichage géométrie lecture seule:', error);
+                }
+            }
+            
+            // Fonction pour créer un cercle en lecture seule
+            function createReadOnlyCircleGraphic(feature, centerCoordinates) {
+                const radius = feature.properties.radius;
+                let center;
+                
+                // Utiliser les coordonnées du centre si disponibles
+                if (centerCoordinates && centerCoordinates.latitude && centerCoordinates.longitude) {
+                    center = [centerCoordinates.longitude, centerCoordinates.latitude];
+                } else if (feature.geometry.coordinates && feature.geometry.coordinates[0] && feature.geometry.coordinates[1]) {
+                    center = feature.geometry.coordinates;
+                } else {
+                    console.warn('⚠️ Coordonnées du centre manquantes pour le cercle');
+                    return null;
+                }
+                
+                // Créer le cercle
+                const circle = new geometryEngine.geodesicBuffer(
+                    new Point({
+                        longitude: center[0],
+                        latitude: center[1]
+                    }),
+                    radius,
+                    'meters'
+                );
+                
+                return new Graphic({
+                    geometry: circle,
+                    symbol: {
+                        type: "simple-fill",
+                        color: [51, 153, 255, 0.3], // Bleu clair transparent
+                        outline: {
+                            color: [51, 153, 255, 0.8], // Bleu plus foncé
+                            width: 2
+                        }
+                    }
+                });
+            }
+            
+            // Fonction pour créer un point en lecture seule
+            function createReadOnlyPointGraphic(feature) {
+                const coords = feature.geometry.coordinates;
+                
+                return new Graphic({
+                    geometry: new Point({
+                        longitude: coords[0],
+                        latitude: coords[1]
+                    }),
+                    symbol: {
+                        type: "simple-marker",
+                        color: [51, 153, 255, 0.8],
+                        outline: {
+                            color: [51, 153, 255, 1],
+                            width: 2
+                        },
+                        size: 12
+                    }
+                });
+            }
+            
+            // Fonction pour créer un polygone en lecture seule
+            function createReadOnlyPolygonGraphic(feature) {
+                return new Graphic({
+                    geometry: {
+                        type: "polygon",
+                        rings: feature.geometry.coordinates
+                    },
+                    symbol: {
+                        type: "simple-fill",
+                        color: [51, 153, 255, 0.3],
+                        outline: {
+                            color: [51, 153, 255, 0.8],
+                            width: 2
+                        }
+                    }
+                });
+            }
+            
+            // Fonction pour créer une polyligne en lecture seule
+            function createReadOnlyPolylineGraphic(feature) {
+                return new Graphic({
+                    geometry: {
+                        type: "polyline",
+                        paths: feature.geometry.coordinates
+                    },
+                    symbol: {
+                        type: "simple-line",
+                        color: [51, 153, 255, 0.8],
+                        width: 3
+                    }
+                });
+            }
+            
+            // Fonction pour créer un rectangle en lecture seule
+            function createReadOnlyRectangleGraphic(feature) {
+                // Les rectangles sont stockés comme des polygones
+                return createReadOnlyPolygonGraphic(feature);
+            }
+            
         </script>
     </body>
     </html>

@@ -1,20 +1,30 @@
-const { defineConfig } = require('eslint/config');
-const auraConfig = require('@salesforce/eslint-plugin-aura');
-const lwcConfig = require('@salesforce/eslint-config-lwc/recommended');
-
-module.exports = defineConfig([
-    // Aura configuration
+export default [
     {
-        files: ['**/aura/**/*.js'],
-        extends: [
-            ...auraConfig.configs.recommended,
-            ...auraConfig.configs.locker
-        ]
-    },
-
-    // LWC configuration
-    {
-        files: ['**/lwc/**/*.js'],
-        extends: [lwcConfig]
+        files: ['**/*.js'],
+        languageOptions: {
+            ecmaVersion: 'latest',
+            sourceType: 'module',
+            globals: {
+                console: 'readonly',
+                window: 'readonly',
+                document: 'readonly',
+                require: 'readonly',
+                module: 'readonly',
+                exports: 'readonly',
+                global: 'readonly'
+            },
+            parserOptions: {
+                ecmaVersion: 'latest',
+                sourceType: 'module'
+            }
+        },
+        rules: {
+            'no-console': 'off',
+            'no-unused-vars': 'warn',
+            'no-undef': 'error',
+            'semi': ['error', 'always'],
+            'quotes': ['error', 'single'],
+            'indent': ['error', 4]
+        }
     }
-]);
+];

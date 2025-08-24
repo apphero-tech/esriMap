@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Package xmlns="http://soap.sforce.com/2006/04/metadata">
+    <types>
+        <members>Map_Area__c</members>
+        <name>CustomObject</name>
+    </types>
+    <types>
+        <members>Map_Area__c.All</members>
+        <members>Map_Area__c.Recently_Viewed</members>
+        <name>ListView</name>
+    </types>
+    <types>
+        <members>ESRI_Map</members>
+        <name>CustomApplication</name>
+    </types>
+    <types>
+        <members>Map_Area__c</members>
+        <name>CustomTab</name>
+    </types>
+    <types>
+        <members>Map_Area_Record_Page</members>
+        <name>FlexiPage</name>
+    </types>
+    <version>64.0</version>
+</Package>

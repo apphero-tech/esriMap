@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ListView xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Recently_Viewed</fullName>
+    <filterScope>Everything</filterScope>
+    <label>Recently Viewed</label>
+    
+    <!-- Colonnes personnalisées dans l'ordre demandé -->
+    <columns>NAME</columns>
+    <columns>Address__c</columns>
+    <columns>Latitude__c</columns>
+    <columns>Longitude__c</columns>
+</ListView>

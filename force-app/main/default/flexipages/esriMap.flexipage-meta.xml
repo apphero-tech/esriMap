@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<FlexiPage xmlns="http://soap.sforce.com/2006/04/metadata">
+    <description>Page de création de zones avec carte ArcGIS interactive</description>
+    
+    <!-- Région principale pour la carte -->
+    <flexiPageRegions>
+        <itemInstances>
+            <componentInstance>
+                <componentName>c:esriMap</componentName>
+                <identifier>esriMapComponent</identifier>
+            </componentInstance>
+        </itemInstances>
+        <name>main</name>
+        <type>Region</type>
+    </flexiPageRegions>
+    
+    <!-- Template -->
+    <masterLabel>ESRI Map Creation</masterLabel>
+    <template>
+        <name>flexipage:defaultAppHomeTemplate</name>
+    </template>
+    <type>AppPage</type>
+</FlexiPage>

@@ -1,21 +1,24 @@
-import { LightningElement, api } from 'lwc';
+import { LightningElement, api, track } from 'lwc';
 import { ShowToastEvent } from 'lightning/platformShowToastEvent';
+import { NavigationMixin } from 'lightning/navigation';
 import saveMapAreas from '@salesforce/apex/MapAreaService.saveMapAreas';
+import getMapAreasByIds from '@salesforce/apex/MapAreaService.getMapAreasByIds';
 
-export default class EsriMap extends LightningElement {
+export default class EsriMap extends NavigationMixin(LightningElement) {
     @api champRelation;
     @api idParent;
+    @api recordId;
+    @api autoCenter = false;
+    @api readOnly = false;
+    @api showControls = false;
     
     isMapInitialized = false;
-    
-    // Coordonnées du dernier clic pour géocodage
     coordinates = { latitude: 0, longitude: 0 };
-    
-    // État du bouton Save Shape
     _isSaveButtonDisabled = true;
     isSaving = false;
+    @track createdRecords = [];
     
-
+    _columns = [];
     
     // URL de la page Visualforce avec ArcGIS
     get vfPageUrl() {
@@ -25,7 +28,7 @@ export default class EsriMap extends LightningElement {
     
     // Label dynamique du bouton Save Shape
     get saveButtonLabel() {
-        return this.isSaving ? 'Sauvegarde...' : 'Save Shape';
+        return this.isSaving ? 'Sauvegarde...' : 'Enregistrer';
     }
     
     // État du bouton (désactivé si pas de forme ou en cours de sauvegarde)
@@ -33,7 +36,9 @@ export default class EsriMap extends LightningElement {
         return this._isSaveButtonDisabled || this.isSaving;
     }
     
-
+    get hasCreatedRecords() {
+        return this.createdRecords && this.createdRecords.length > 0;
+    }
     
     renderedCallback() {
         if (this.isMapInitialized) {
@@ -43,540 +48,327 @@ export default class EsriMap extends LightningElement {
         this.initializeIframe();
     }
 
+    // Initialiser l'iframe
     initializeIframe() {
-        const container = this.template.querySelector('.map-container');
-        if (!container) {
-            return;
-        }
-        
-        // Créer l'iframe pour la page Visualforce
-        const iframe = document.createElement('iframe');
-        iframe.src = this.vfPageUrl;
-        iframe.style.width = '100%';
-        iframe.style.height = '100%';
-        iframe.style.border = 'none';
-        iframe.style.borderRadius = '4px';
-        
-        // Ajouter l'iframe au conteneur
-        container.appendChild(iframe);
-        
-        // Écouter les messages de l'iframe
-        const boundHandler = this.handleIframeMessage.bind(this);
-        window.addEventListener('message', boundHandler);
+        console.log('🗺️ Initialisation iframe carte');
+        // L'iframe se charge automatiquement via l'attribut src
     }
     
-    handleIframeMessage(event) {
-        // Vérification d'origine pour Salesforce
-        const isValidOrigin = event.origin.includes(window.location.hostname) || 
-                             event.origin.includes('.salesforce.com') ||
-                             event.origin.includes('.force.com') ||
-                             event.origin === window.location.origin;
+    // Gérer le chargement de l'iframe
+    onMapReady() {
+        console.log('🗺️ Iframe carte chargée');
+        // La carte est prête pour l'utilisation
+    }
+    
+    // Gérer la sauvegarde de la forme
+    handleSaveShape() {
+        if (this.isSaving) return;
         
-        if (!isValidOrigin) {
+        this.isSaving = true;
+        console.log('💾 Sauvegarde de la forme...');
+        
+        // Envoyer le message de sauvegarde à Visualforce
+        this.sendMessageToVF({
+            type: 'SAVE_SHAPE',
+            data: {
+                champRelation: this.champRelation,
+                idParent: this.idParent
+            }
+        });
+    }
+    
+    // Gérer l'action Annuler
+    handleCancel() {
+        // Demander au VF de tout effacer et revenir à l'état initial
+        this.sendMessageToVF({ type: 'CLEAR_ALL', data: {} });
+        // Réinitialiser l'état local
+        this._isSaveButtonDisabled = true;
+        this.coordinates = { latitude: 0, longitude: 0 };
+        this.isSaving = false;
+    }
+    
+    // Envoyer un message à la page Visualforce
+    sendMessageToVF(message) {
+        const iframe = this.template.querySelector('.map-iframe');
+        if (iframe && iframe.contentWindow) {
+            iframe.contentWindow.postMessage(message, '*');
+        } else {
+            console.warn('⚠️ Iframe non trouvée pour envoi de message');
+        }
+    }
+    
+    // Gérer les messages reçus de Visualforce
+    handleMessageFromVF(event) {
+        // STANDARD SALESFORCE: Accepter les messages des domaines Visualforce et Lightning
+        const isSalesforceDomain = event.origin.includes('force.com') || 
+                                  event.origin.includes('salesforce.com') ||
+                                  event.origin.includes('vf.force.com');
+        
+        if (!isSalesforceDomain) {
+            console.log('⚠️ Domaine non autorisé, message ignoré');
             return;
         }
         
-        switch (event.data.type) {
-            case 'MAP_READY':
-                this.onMapReady();
-                break;
-                
-            case 'MAP_CLICK':
-                this.onMapClick(event.data.coordinates);
-                break;
-                
+        const { type, data } = event.data;
+        console.log('📨 Message reçu de Visualforce:', type, data);
+        
+        switch (type) {
             case 'SHAPE_SELECTED':
-                this.onShapeSelected(event.data.shape);
+                this._isSaveButtonDisabled = false;
+                if (data.shape && data.shape.coordinates && data.shape.coordinates.length > 0) {
+                    this.coordinates = data.shape.coordinates[0];
+                }
+                console.log('✅ Forme sélectionnée, bouton Save activé');
+                break;
+                
+            case 'SHAPE_DATA':
+                // Appel Apex depuis LWC pour créer l'enregistrement réel
+                try {
+                    const payloadShape = (data && (data.shapeData || data)) || (event.data && (event.data.shapeData || event.data.data && event.data.data.shapeData));
+                    if (payloadShape) {
+                        this.saveShapeViaApex(payloadShape);
+                    } else {
+                        // eslint-disable-next-line no-console
+                        console.warn('SHAPE_DATA reçu sans contenu exploitable:', event.data);
+                        this.isSaving = false;
+                    }
+                } catch (e) {
+                    this.isSaving = false;
+                    this.showToast('Erreur', e.message || 'Erreur lors du traitement SHAPE_DATA', 'error');
+                }
                 break;
                 
             case 'NO_SHAPE_SELECTED':
-                this.onNoShapeSelected();
+                this._isSaveButtonDisabled = true;
+                console.log('❌ Aucune forme sélectionnée, bouton Save désactivé');
                 break;
                 
-            case 'CURRENT_SHAPES_RESPONSE':
-                this.onCurrentShapesResponse(event.data);
+            case 'SAVE_SUCCESS':
+                this.isSaving = false;
+                this._isSaveButtonDisabled = true;
+                this.showToast('Succès', 'Forme sauvegardée avec succès', 'success');
                 break;
                 
-            case 'ADDRESS_SELECTED':
-                this.onAddressSelected(event.data.address);
+            case 'SAVE_ERROR':
+                this.isSaving = false;
+                this.showToast('Erreur', 'Erreur lors de la sauvegarde: ' + data.error, 'error');
                 break;
                 
-
+            case 'COORDINATES_UPDATE':
+                this.coordinates = data.coordinates;
+                break;
+                
+            case 'NAVIGATE_TO_RECORD':
+                console.log('🔗 Navigation vers l\'enregistrement:', data);
+                // Navigation automatique désactivée
+                break;
         }
     }
     
-    onMapReady() {
-        // Carte ArcGIS opérationnelle
-        console.log('Map is ready');
-    }
-    
-    onMapClick(coordinates) {
-        // Mettre à jour les coordonnées
-        this.coordinates = coordinates;
-        
-        // Envoyer les coordonnées à la page Visualforce pour géocodage
-        const iframe = this.template.querySelector('iframe');
-        if (iframe && iframe.contentWindow) {
-            iframe.contentWindow.postMessage({
-                type: 'GEOCODE_REQUEST',
-                coordinates: coordinates
-            }, '*');
-        }
-    }
-    
-    // Méthode pour gérer la sélection d'une adresse
-    onAddressSelected(addressData) {
-        console.log('📍 Adresse sélectionnée:', addressData);
-        
-        // Convertir l'adresse en format compatible avec le système de sauvegarde
-        const shapeData = {
-            type: 'Adresse',
-            coordinates: addressData.coordinates,
-            center: addressData.center,
-            address: addressData.address,
-            isAddress: true
-        };
-        
-        // Traiter comme une forme normale
-        this.onShapeSelected(shapeData);
-        
-        console.log('✅ Adresse convertie en forme et sélectionnée');
-    }
-    
-    onShapeSelected(shape) {
-        // Stocker la forme sélectionnée
-        this.selectedShape = shape;
-        
-        // Activer le bouton quand une forme est sélectionnée
-        this._isSaveButtonDisabled = false;
-        console.log('🎨 Forme sélectionnée et stockée:', shape);
-    }
-    
-    onNoShapeSelected() {
-        // Désactiver le bouton quand aucune forme n'est sélectionnée
-        this._isSaveButtonDisabled = true;
-        console.log('❌ Aucune forme sélectionnée');
-    }
-    
-    onCurrentShapesResponse(data) {
-        console.log('📊 Réponse des formes actuelles:', data);
-        
-        if (data.totalCount === 0) {
-            console.log('❌ Aucune forme disponible sur la carte');
-            this.showToast('Information', 'Aucune forme sélectionnée', 'info');
-            this.isSaving = false;
-            return;
-        }
-        
-        // Transformer les formes en données pour Salesforce avec validation
-        const shapesData = [];
-        const invalidShapes = [];
-        
-        data.shapes.forEach((shape, index) => {
-            // Valider que les coordonnées sont présentes
-            if (!this.hasValidCoordinates(shape)) {
-                console.warn(`⚠️ Forme ${index + 1} (${shape.type}) sans coordonnées valides:`, shape);
-                invalidShapes.push({ index: index + 1, type: shape.type });
-                return;
-            }
-            
-            const geoJson = this.convertToGeoJSON(shape);
-            const centroid = this.calculateCentroid(shape);
-            
-            const shapeData = {
-                name: null, // Sera généré automatiquement par Apex
-                areaType: shape.type,
-                geoJson: JSON.stringify(geoJson),
-                latitude: centroid.latitude,
-                longitude: centroid.longitude,
-                address: shape.address || null // Adresse depuis la page Visualforce
-            };
-            
-            shapesData.push(shapeData);
-            console.log(`✅ Forme ${index + 1} validée:`, shapeData);
-        });
-        
-        // Afficher un avertissement si des formes sont invalides
-        if (invalidShapes.length > 0) {
-            const warningMessage = `${invalidShapes.length} forme(s) ignorée(s) (coordonnées manquantes)`;
-            this.showToast('Avertissement', warningMessage, 'warning');
-        }
-        
-        // Vérifier qu'il reste des formes valides à sauvegarder
-        if (shapesData.length === 0) {
-            this.showToast('Erreur', 'Aucune forme avec coordonnées valides à sauvegarder', 'error');
-            this.isSaving = false;
-            return;
-        }
-        
-        // Sauvegarder dans Salesforce
-        this.saveToSalesforce(shapesData);
-    }
-    
-    /**
-     * Vérifier que la forme a des coordonnées valides
-     */
-    hasValidCoordinates(shape) {
-        // Vérifier que la forme a des coordonnées
-        if (!shape.coordinates || shape.coordinates.length === 0) {
-            return false;
-        }
-        
-        // Vérifier que les coordonnées ont latitude et longitude
-        for (const coord of shape.coordinates) {
-            if (typeof coord.latitude !== 'number' || typeof coord.longitude !== 'number' ||
-                isNaN(coord.latitude) || isNaN(coord.longitude)) {
-                return false;
-            }
-        }
-        
-        return true;
-    }
-    
-
-    
-    convertToGeoJSON(shape) {
-        let geoJson = {
-            type: "Feature",
-            properties: {
-                originalType: shape.type
-            },
-            geometry: null
-        };
-        
-        switch (shape.type) {
-            case 'Point':
-                geoJson.geometry = {
-                    type: "Point",
-                    coordinates: [shape.coordinates[0].longitude, shape.coordinates[0].latitude]
-                };
-                break;
-                
-            case 'Polyline':
-                geoJson.geometry = {
-                    type: "LineString",
-                    coordinates: shape.coordinates.map(coord => [coord.longitude, coord.latitude])
-                };
-                break;
-                
-            case 'Polygon':
-                // Fermer le polygone si ce n'est pas déjà fait
-                let coords = shape.coordinates.map(coord => [coord.longitude, coord.latitude]);
-                if (coords[0][0] !== coords[coords.length - 1][0] || coords[0][1] !== coords[coords.length - 1][1]) {
-                    coords.push(coords[0]);
-                }
-                geoJson.geometry = {
-                    type: "Polygon",
-                    coordinates: [coords]
-                };
-                break;
-                
-            case 'Rectangle':
-                // Créer un polygone rectangulaire à partir des coins SW et NE
-                const sw = shape.coordinates[0]; // Sud-Ouest
-                const ne = shape.coordinates[1]; // Nord-Est
-                geoJson.geometry = {
-                    type: "Polygon",
-                    coordinates: [[
-                        [sw.longitude, sw.latitude], // SW
-                        [ne.longitude, sw.latitude], // SE
-                        [ne.longitude, ne.latitude], // NE
-                        [sw.longitude, ne.latitude], // NW
-                        [sw.longitude, sw.latitude]  // Fermer le polygone
-                    ]]
-                };
-                geoJson.properties.shapeType = "Rectangle";
-                break;
-                
-            case 'Circle':
-                // Pour un cercle, on garde le centre et on ajoute le rayon dans les propriétés
-                // Le GeoJSON standard ne supporte pas les cercles, on utilise un Point avec rayon
-                geoJson.geometry = {
-                    type: "Point",
-                    coordinates: [shape.center.longitude, shape.center.latitude]
-                };
-                geoJson.properties.shapeType = "Circle";
-                geoJson.properties.radius = this.calculateCircleRadius(shape);
-                break;
-                
-            case 'Adresse':
-                // Pour une adresse, on utilise un Point avec l'adresse dans les propriétés
-                geoJson.geometry = {
-                    type: "Point",
-                    coordinates: [shape.center.longitude, shape.center.latitude]
-                };
-                geoJson.properties.shapeType = "Adresse";
-                geoJson.properties.address = shape.address;
-                break;
-                
-            default:
-                console.warn('Type de forme non reconnu:', shape.type);
-                geoJson.geometry = {
-                    type: "Point",
-                    coordinates: [0, 0]
-                };
-        }
-        
-        return geoJson;
-    }
-    
-    calculateCentroid(shape) {
-        let centroid = { latitude: 0, longitude: 0 };
-        
-        switch (shape.type) {
-            case 'Point':
-                centroid = {
-                    latitude: shape.coordinates[0].latitude,
-                    longitude: shape.coordinates[0].longitude
-                };
-                break;
-                
-            case 'Adresse':
-                // Pour une adresse, le centroïde est le point central
-                centroid = {
-                    latitude: shape.center.latitude,
-                    longitude: shape.center.longitude
-                };
-                break;
-                
-            case 'Polyline':
-            case 'Polygon':
-                // Calculer la moyenne des coordonnées
-                let sumLat = 0, sumLng = 0;
-                shape.coordinates.forEach(coord => {
-                    sumLat += coord.latitude;
-                    sumLng += coord.longitude;
-                });
-                centroid = {
-                    latitude: sumLat / shape.coordinates.length,
-                    longitude: sumLng / shape.coordinates.length
-                };
-                break;
-                
-            case 'Rectangle':
-                // Centre du rectangle = moyenne des coins SW et NE
-                const sw = shape.coordinates[0];
-                const ne = shape.coordinates[1];
-                centroid = {
-                    latitude: (sw.latitude + ne.latitude) / 2,
-                    longitude: (sw.longitude + ne.longitude) / 2
-                };
-                break;
-                
-            case 'Circle':
-                // Le centroïde d'un cercle est son centre
-                centroid = {
-                    latitude: shape.center.latitude,
-                    longitude: shape.center.longitude
-                };
-                break;
-                
-            default:
-                console.warn('Type de forme non reconnu pour le centroïde:', shape.type);
-        }
-        
-        return centroid;
-    }
-    
-    calculateCircleRadius(shape) {
-        // Calculer le rayon approximatif en degrés
-        const sw = shape.coordinates[0];
-        const ne = shape.coordinates[1];
-        return Math.abs(ne.latitude - sw.latitude) / 2;
-    }
-    
-    // Méthode pour sauvegarder une adresse sélectionnée
-    saveAddressToSalesforce(addressShape) {
-        console.log('💾 Sauvegarde de l\'adresse:', addressShape);
-        
+    // Sauvegarder via Apex (appel depuis SHAPE_DATA reçu de VF)
+    async saveShapeViaApex(shapeData) {
         try {
-            // Convertir l'adresse en format compatible avec Apex
-            const geoJson = this.convertToGeoJSON(addressShape);
-            const centroid = this.calculateCentroid(addressShape);
-            
-            const addressData = {
-                name: null, // Sera généré automatiquement par Apex
-                areaType: 'Point', // Utiliser "Point" temporairement car "Adresse" n'est pas encore dans la picklist
-                geoJson: JSON.stringify(geoJson),
-                latitude: centroid.latitude,
-                longitude: centroid.longitude,
-                address: addressShape.address || 'Adresse non trouvée'
-            };
-            
-            console.log('✅ Données d\'adresse préparées:', addressData);
-            
-            // Sauvegarder dans Salesforce
-            this.saveToSalesforce([addressData]);
-            
-        } catch (error) {
-            console.error('❌ Erreur lors de la préparation de l\'adresse:', error);
-            this.showToast('Erreur', 'Erreur lors de la préparation de l\'adresse', 'error');
-            this.isSaving = false;
-        }
-    }
-    
-
-    
-    handleSaveShape() {
-        // Activer l'état de chargement
         this.isSaving = true;
-        
-        // VÉRIFIER SI UNE ADRESSE EST SÉLECTIONNÉE
-        if (this.selectedShape && this.selectedShape.isAddress) {
-            console.log('📍 Sauvegarde d\'une adresse sélectionnée:', this.selectedShape);
-            
-            // Traiter directement l'adresse sélectionnée
-            this.saveAddressToSalesforce(this.selectedShape);
-            return;
-        }
-        
-        // Sinon, demander la forme actuellement sélectionnée à la carte
-        const iframe = this.template.querySelector('iframe');
-        if (iframe && iframe.contentWindow) {
-            iframe.contentWindow.postMessage({
-                type: 'GET_CURRENT_SHAPE'
-            }, '*');
-        }
-    }
-    
-    async saveToSalesforce(shapesData) {
-        try {
-            console.log('💾 Sauvegarde des formes:', shapesData);
-            
-            // Journaliser les données envoyées pour diagnostic
-            this.logShapeDataForDiagnostic(shapesData);
-            
-            const result = await saveMapAreas({ shapesData: shapesData });
-            
-            console.log('✅ Résultat de sauvegarde:', result);
-            
-            if (result.success) {
-                // Succès - Afficher le toast standard Salesforce
-                this.showStandardSuccessToast(result);
-                
-                // Désélectionner les formes sur la carte
-                this.clearMapSelection();
-                
-                // Log des IDs créés pour inspection
-                console.log('🎯 IDs créés:', result.recordIds);
-                
-            } else {
-                // Erreur avec diagnostic amélioré
-                this.handleSaveError(result, shapesData);
-            }
-            
-        } catch (error) {
-            console.error('❌ Erreur lors de la sauvegarde:', error);
-            this.showToast('Erreur', 'Erreur inattendue lors de la sauvegarde: ' + error.body?.message || error.message, 'error');
-        } finally {
-            // Réactiver le bouton
-            this.isSaving = false;
-        }
-    }
-    
-    /**
-     * Afficher le toast de succès standard Salesforce
-     */
-    showStandardSuccessToast(result) {
-        // Message avec pluriel correct
-        let message;
-        if (result.recordsCreated === 1) {
-            message = '1 zone de carte a été créée avec succès.';
-        } else {
-            message = `${result.recordsCreated} zones de carte ont été créées avec succès.`;
-        }
-        
-        // Toast standard Salesforce sans icône
-        this.showToast('Succès', message, 'success');
-    }
-    
-    /**
-     * Désélectionner toutes les formes sur la carte
-     */
-    clearMapSelection() {
-        const iframe = this.template.querySelector('iframe');
-        if (iframe && iframe.contentWindow) {
-            iframe.contentWindow.postMessage({
-                type: 'CLEAR_SELECTION'
-            }, '*');
-        }
-        
-        // Désactiver le bouton Save Shape
-        this._isSaveButtonDisabled = true;
-        console.log('🗑️ Sélection de la carte vidée, bouton désactivé');
-    }
-    
+            // Adapter au contrat Apex: saveMapAreas(List<ShapeData>)
+            const payload = [{
+                name: shapeData.name,
+                areaType: shapeData.areaType,
+                geoJson: shapeData.geoJson,
+                latitude: shapeData.latitude,
+                longitude: shapeData.longitude,
+                address: shapeData.address
+            }];
 
-    
-    logShapeDataForDiagnostic(shapesData) {
-        console.log('🔍 DIAGNOSTIC - Données envoyées:');
-        shapesData.forEach((shape, index) => {
-            console.log(`  Forme ${index + 1}:`);
-            console.log(`    - Type: ${shape.areaType}`);
-            console.log(`    - Nom: ${shape.name || 'AUTO'}`);
-            console.log(`    - GeoJSON longueur: ${shape.geoJson ? shape.geoJson.length : 0} caractères`);
-            console.log(`    - Latitude: ${shape.latitude}`);
-            console.log(`    - Longitude: ${shape.longitude}`);
-            console.log(`    - Adresse: ${shape.address || 'Non renseignée'}`);
+            const result = await saveMapAreas({ shapesData: payload });
+            if (result && result.success && result.recordIds && result.recordIds.length > 0) {
+                // Enrichir via Apex pour récupérer Name standard, adresse, coords, auteur et date
+                let summaries = {};
+                try {
+                    summaries = await getMapAreasByIds({ recordIds: result.recordIds });
+                } catch (e) {
+                    summaries = {};
+                }
+                const newItems = [];
+                for (let id of result.recordIds) {
+                    const url = await this[NavigationMixin.GenerateUrl]({
+                        type: 'standard__recordPage',
+                        attributes: { recordId: id, actionName: 'view' }
+                    });
+                    const s = summaries && summaries[id] ? summaries[id] : null;
+                    newItems.push({
+                        id,
+                        url,
+                        name: s && s.Name ? s.Name : id,
+                        address: s && s.Address__c ? s.Address__c : (payload[0].address || ''),
+                        latitude: s && s.Latitude__c ? s.Latitude__c : null,
+                        longitude: s && s.Longitude__c ? s.Longitude__c : null,
+                        type: s && s.Area_Type__c ? s.Area_Type__c : (payload[0].areaType || ''),
+                        createdByName: s && s.CreatedBy ? s.CreatedBy.Name : '',
+                        createdDate: s && s.CreatedDate ? s.CreatedDate : null,
+                        geoJson: s && s.Geometry_JSON__c ? s.Geometry_JSON__c : (payload[0].geoJson || '')
+                    });
+                }
+                this.createdRecords = [...newItems, ...this.createdRecords];
+
+                this.isSaving = false;
+                this._isSaveButtonDisabled = true;
+                this.showToast('Succès', result.message || 'Forme sauvegardée avec succès', 'success');
+            } else {
+                this.isSaving = false;
+                const message = (result && result.message) ? result.message : 'Erreur inconnue lors de la sauvegarde';
+                const details = (result && result.errorDetails && result.errorDetails.length)
+                    ? ' Détails: ' + result.errorDetails.map(e => e.errorMessage).join(' | ')
+                    : '';
+                // Log complet pour debug
+                // eslint-disable-next-line no-console
+                console.error('SAVE_ERROR result:', JSON.stringify(result));
+                this.showToast('Erreur', message + details, 'error');
+            }
+        } catch (e) {
+            this.isSaving = false;
+            this.showToast('Erreur', e && e.body && e.body.message ? e.body.message : (e.message || 'Erreur Apex'), 'error');
+        }
+    }
+
+    // Clic sur une ligne: afficher/centrer la forme sur la carte (hybride cache/Apex)
+    async handleRowClick(event) {
+        const recordId = event.currentTarget.dataset.id;
+        const rec = this.createdRecords.find(r => r.id === recordId);
+        let areaType = rec?.type;
+        let geometryData = rec?.geoJson; // si présent en cache
+
+        if (!geometryData) {
+            // Fallback Apex si pas en cache
+            try {
+                const res = await fetch(`/services/data/v64.0/sobjects/Map_Area__c/${recordId}`);
+                if (res.ok) {
+                    const data = await res.json();
+                    geometryData = data.Geometry_JSON__c;
+                    areaType = data.Area_Type__c;
+                }
+            } catch (e) {
+                // ignorer
+            }
+        }
+        if (!geometryData || !areaType) return;
+
+        // Envoyer au VF
+        this.sendMessageToVF({
+            type: 'DISPLAY_SAVED_SHAPE',
+            geometryData,
+            areaType,
+            autoCenter: true
         });
     }
-    
-    handleSaveError(result, shapesData) {
-        // Message principal d'erreur
-        let errorMessage = result.message || 'Échec de la sauvegarde';
-        
-        // Ajouter le premier message d'erreur lisible
-        if (result.errorDetails && result.errorDetails.length > 0) {
-            const firstError = result.errorDetails[0];
-            errorMessage += ` - ${firstError.errorMessage}`;
-            
-            // Log détaillé des erreurs
-            console.error('❌ DIAGNOSTIC DÉTAILLÉ DES ERREURS:');
-            result.errorDetails.forEach((errorDetail, index) => {
-                console.error(`  Erreur ${index + 1}:`);
-                console.error(`    - Message: ${errorDetail.errorMessage}`);
-                console.error(`    - Champ: ${errorDetail.fieldName || 'Non spécifié'}`);
-                console.error(`    - Validation: ${errorDetail.validation}`);
-                console.error(`    - Index forme: ${errorDetail.itemIndex}`);
-                
-                // Afficher les données de la forme en erreur
-                if (errorDetail.itemIndex >= 0 && errorDetail.itemIndex < shapesData.length) {
-                    const failedShape = shapesData[errorDetail.itemIndex];
-                    console.error(`    - Données de la forme échouée:`);
-                    console.error(`      * Type: ${failedShape.areaType}`);
-                    console.error(`      * GeoJSON longueur: ${failedShape.geoJson ? failedShape.geoJson.length : 0}`);
-                    console.error(`      * Coordonnées: ${failedShape.latitude}, ${failedShape.longitude}`);
+
+    async handleViewOnMap(event) {
+        const recordId = event.currentTarget.dataset.id;
+        const rec = this.createdRecords.find(r => r.id === recordId);
+        let areaType = rec?.type;
+        let geometryData = rec?.geoJson;
+        if (!geometryData) {
+            try {
+                const summaries = await getMapAreasByIds({ recordIds: [recordId] });
+                const s = summaries && summaries[recordId] ? summaries[recordId] : null;
+                if (s) {
+                    geometryData = s.Geometry_JSON__c;
+                    areaType = s.Area_Type__c;
                 }
-            });
-        } else if (result.errors && result.errors.length > 0) {
-            errorMessage += ` - ${result.errors[0]}`;
+            } catch (e) {}
         }
-        
-        this.showToast('Échec de la sauvegarde', errorMessage, 'error');
+        if (!geometryData || !areaType) return;
+        this.sendMessageToVF({ type: 'DISPLAY_SAVED_SHAPE', geometryData, areaType, autoCenter: true });
     }
-    
+
+    // Afficher un toast
     showToast(title, message, variant) {
         const event = new ShowToastEvent({
             title: title,
             message: message,
-            variant: variant,
-            mode: 'dismissible'
+            variant: variant
         });
         this.dispatchEvent(event);
     }
     
-
+    // Écouter les messages de Visualforce
+    connectedCallback() {
+        window.addEventListener('message', this.handleMessageFromVF.bind(this));
+    }
     
-    // Méthode pour centrer la carte depuis le LWC
-    centerMap(longitude, latitude, zoom = 12) {
-        const iframe = this.template.querySelector('iframe');
-        if (iframe && iframe.contentWindow) {
-            iframe.contentWindow.postMessage({
-                type: 'CENTER_MAP',
-                longitude: longitude,
-                latitude: latitude,
-                zoom: zoom
-            }, '*');
+    disconnectedCallback() {
+        window.removeEventListener('message', this.handleMessageFromVF.bind(this));
+    }
+
+    // Colonnes dynamiques calculées pour remplir la largeur
+    get tableColumns() {
+        if (this._columns.length) return this._columns;
+        return this.buildColumns(520); // fallback par défaut
+    }
+
+    get tableRows() {
+        return this.createdRecords;
+    }
+
+    renderedCallback() {
+        if (!this._resizeBound) {
+            this._resizeBound = true;
+            window.addEventListener('resize', () => this.recomputeColumns());
+        }
+        this.recomputeColumns();
+    }
+
+    recomputeColumns() {
+        try {
+            const container = this.template.querySelector('.enregistrements-container') || this.template.querySelector('.slds-card__body');
+            if (!container) return;
+            const available = container.clientWidth || 1000;
+            const nextCols = this.buildColumns(available);
+            // Compare shallowly by initialWidth and labels to avoid infinite re-renders
+            const prev = this._columns;
+            const changed = !prev || prev.length !== nextCols.length || prev.some((c, i) => {
+                const n = nextCols[i];
+                return c.initialWidth !== n.initialWidth || c.label !== n.label || c.fieldName !== n.fieldName;
+            });
+            if (changed) {
+                this._columns = nextCols;
+            }
+        } catch (e) {
+            // ignore
+        }
+    }
+
+    buildColumns(containerWidth) {
+        // Largeurs fixes des colonnes compactes (px)
+        const widthName = 140;
+        const widthLat = 130;
+        const widthLong = 130;
+        const widthType = 130;
+        const widthCreatedBy = 130;
+        const widthCreatedDate = 130;
+        const widthAction = 160;
+        const widthRowNum = 56; // colonne numéros de ligne de lightning-datatable
+        const paddings = 48; // marge approximative
+        const sumFixed = widthRowNum + widthName + widthLat + widthLong + widthType + widthCreatedBy + widthCreatedDate + widthAction + paddings;
+        const addressWidth = Math.max(320, containerWidth - sumFixed);
+        return [
+            { label: 'Nom', fieldName: 'url', type: 'url', initialWidth: widthName, typeAttributes: { label: { fieldName: 'name' }, target: '_blank' } },
+            { label: 'Adresse', fieldName: 'address', wrapText: true, initialWidth: addressWidth },
+            { label: 'Latitude', fieldName: 'latitude', type: 'number', initialWidth: widthLat, cellAttributes: { alignment: 'left' } },
+            { label: 'Longitude', fieldName: 'longitude', type: 'number', initialWidth: widthLong, cellAttributes: { alignment: 'left' } },
+            { label: 'Type', fieldName: 'type', initialWidth: widthType },
+            { label: 'Créé par', fieldName: 'createdByName', initialWidth: widthCreatedBy },
+            { label: 'Date de création', fieldName: 'createdDate', type: 'date', initialWidth: widthCreatedDate, typeAttributes: { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' } },
+            { type: 'action', typeAttributes: { rowActions: [ { label: 'Voir sur la carte', name: 'view_on_map' } ] }, initialWidth: widthAction }
+        ];
+    }
+
+    handleRowAction(event) {
+        const actionName = event.detail.action.name;
+        const row = event.detail.row;
+        if (actionName === 'view_on_map') {
+            // Simuler le clic bouton précédent
+            const fakeEvt = { currentTarget: { dataset: { id: row.id } } };
+            this.handleViewOnMap(fakeEvt);
         }
     }
 }

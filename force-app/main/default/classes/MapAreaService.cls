@@ -42,7 +42,41 @@ public with sharing class MapAreaService {
             this.recordsCreated = 0;
         }
     }
-    
+
+    @AuraEnabled(cacheable=true)
+    public static Map<Id, Map_Area__c> getMapAreasByIds(List<Id> recordIds) {
+        Map<Id, Map_Area__c> result = new Map<Id, Map_Area__c>();
+        if (recordIds == null || recordIds.isEmpty()) return result;
+        for (Map_Area__c ma : [
+            SELECT Id, Name, Address__c, Latitude__c, Longitude__c,
+                   Area_Type__c, Geometry_JSON__c, CreatedBy.Name, CreatedDate
+            FROM Map_Area__c WHERE Id IN :recordIds
+        ]) {
+            result.put(ma.Id, ma);
+        }
+        return result;
+    }
+
+    /**
+     * Méthode pour récupérer les données géométriques d'un enregistrement Map_Area__c
+     * Utilisée par le composant esriMap en mode lecture seule
+     */
+    @AuraEnabled(cacheable=true)
+    public static Map_Area__c getMapAreaGeometry(Id recordId) {
+        try {
+            return [
+                SELECT Id, Name, Area_Type__c, Geometry_JSON__c, 
+                       Latitude__c, Longitude__c, Address__c 
+                FROM Map_Area__c 
+                WHERE Id = :recordId 
+                LIMIT 1
+            ];
+        } catch (Exception e) {
+            System.debug('❌ Erreur lors de la récupération de Map_Area__c: ' + e.getMessage());
+            throw new AuraHandledException('Impossible de récupérer les données géométriques: ' + e.getMessage());
+        }
+    }
+
     /**
      * Classe pour détailler les erreurs
      */
@@ -93,12 +127,22 @@ public with sharing class MapAreaService {
                 ShapeData shapeData = shapesData[i];
                 Map_Area__c mapArea = new Map_Area__c();
                 
-                // Nom par défaut si non fourni
-                if (String.isBlank(shapeData.name)) {
-                    mapArea.Name__c = 'Area ' + Datetime.now().format('yyyy-MM-dd HH:mm:ss');
-                } else {
-                    mapArea.Name__c = shapeData.name.left(255); // Respecter la limite du champ
-                }
+                // Le champ Name standard (Auto Number) est géré par Salesforce.
+                // Si un ancien champ Name__c existe encore dans l'org et est requis,
+                // le renseigner dynamiquement pour éviter REQUIRED_FIELD_MISSING pendant la transition.
+                try {
+                    Map<String, Schema.SObjectField> fieldMap = Schema.sObjectType.Map_Area__c.fields.getMap();
+                    if (fieldMap.containsKey('Name__c')) {
+                        Schema.DescribeFieldResult d = fieldMap.get('Name__c').getDescribe();
+                        if (d.isCreateable()) {
+                            String fallbackName = String.isNotBlank(shapeData.address)
+                                ? shapeData.address.left(255)
+                                : 'Area ' + Datetime.now().format('yyyy-MM-dd HH:mm:ss');
+                            // Utiliser set dynamique pour éviter les références compile-time
+                            mapArea.put('Name__c', fallbackName);
+                        }
+                    }
+                } catch (Exception ignore) {}
                 
                 // Valider et assigner le type
                 if (isValidAreaType(shapeData.areaType)) {
@@ -183,6 +227,8 @@ public with sharing class MapAreaService {
                             validation = 'Insufficient access on cross reference entity';
                         } else if (error.getStatusCode() == StatusCode.INSUFFICIENT_ACCESS_OR_READONLY) {
                             validation = 'Insufficient access or readonly';
+                        } else if (error.getStatusCode() == StatusCode.REQUIRED_FIELD_MISSING) {
+                            validation = 'REQUIRED_FIELD_MISSING';
                         } else {
                             validation = 'Database error: ' + error.getStatusCode();
                         }
@@ -236,7 +282,7 @@ public with sharing class MapAreaService {
         Map<String, Schema.SObjectField> fieldMap = Schema.sObjectType.Map_Area__c.fields.getMap();
         
         List<String> requiredFields = new List<String>{
-            'Name__c', 'Area_Type__c', 'Geometry_JSON__c', 
+            'Area_Type__c', 'Geometry_JSON__c', 
             'Latitude__c', 'Longitude__c', 'Address__c'
         };
         
