@@ -19,8 +19,8 @@
             </div>
         </div>
 
-        <!-- Boutons principaux -->
-        <div class="primary-buttons buttons-section">
+        <!-- Boutons principaux centrés -->
+        <div class="primary-buttons buttons-section slds-text-align_center">
             <lightning-button 
                 variant="brand" 
                 label={saveButtonLabel}
@@ -37,10 +37,10 @@
             </lightning-button>
         </div>
 
-        <!-- Liste des enregistrements créés (CSS Grid SLDS-like) -->
+        <!-- Liste des enregistrements créés - version précédente (CSS Grid) -->
         <div class="enregistrements-section records-card content-section">
             <div class="section-header section-title">Enregistrements créés</div>
-            <!-- Header row -->
+            <!-- En-têtes -->
             <div class="records-table table-header-row">
                 <div class="table-header">Nom</div>
                 <div class="table-header">Adresse</div>
@@ -51,7 +51,7 @@
                 <div class="table-header desktop-only">Date de création</div>
                 <div class="table-header">Actions</div>
             </div>
-            <!-- Rows -->
+            <!-- Lignes -->
             <template for:each={tableRows} for:item="rec">
                 <div key={rec.id} class="records-table">
                     <div class="table-cell"><a href={rec.url} target="_blank">{rec.name}</a></div>

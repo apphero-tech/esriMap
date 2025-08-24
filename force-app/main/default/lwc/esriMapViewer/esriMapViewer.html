@@ -1,11 +1,20 @@
 <template>
-    <div class="map-container">
-        <iframe 
-            src={vfPageUrl} 
-            title="Carte ArcGIS en lecture seule"
-            class="map-iframe"
-            onload={onMapReady}
-            sandbox="allow-scripts allow-same-origin allow-forms">
-        </iframe>
+    <div class="map-viewer-card">
+        <div class="slds-card__header">
+            <h2 class="slds-card__header-title">
+                <span class="slds-text-heading_small">{cardTitle}</span>
+            </h2>
+        </div>
+        <div class="slds-card__body slds-card__body_inner">
+            <div class="map-container">
+                <iframe 
+                    src={vfPageUrl} 
+                    title="Carte ArcGIS - Visualisation de la zone"
+                    class="map-iframe"
+                    onload={onMapReady}
+                    sandbox="allow-scripts allow-same-origin allow-forms">
+                </iframe>
+            </div>
+        </div>
     </div>
 </template>

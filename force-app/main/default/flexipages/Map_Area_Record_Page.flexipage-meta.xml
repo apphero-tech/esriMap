@@ -1,11 +1,29 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <FlexiPage xmlns="http://soap.sforce.com/2006/04/metadata">
-    <description>Page d'enregistrement Map Area avec carte intégrée - Compatible desktop et mobile</description>
-    
-    <!-- Région header avec highlights -->
+    <description>Page d&apos;enregistrement Map Area avec carte intégrée - Compatible desktop et mobile</description>
     <flexiPageRegions>
         <itemInstances>
             <componentInstance>
+                <componentInstanceProperties>
+                    <name>collapsed</name>
+                    <value>false</value>
+                </componentInstanceProperties>
+                <componentInstanceProperties>
+                    <name>enableActionsConfiguration</name>
+                    <value>false</value>
+                </componentInstanceProperties>
+                <componentInstanceProperties>
+                    <name>enableActionsInNative</name>
+                    <value>false</value>
+                </componentInstanceProperties>
+                <componentInstanceProperties>
+                    <name>hideChatterActions</name>
+                    <value>false</value>
+                </componentInstanceProperties>
+                <componentInstanceProperties>
+                    <name>numVisibleActions</name>
+                    <value>3</value>
+                </componentInstanceProperties>
                 <componentName>force:highlightsPanel</componentName>
                 <identifier>highlightsPanel</identifier>
             </componentInstance>
@@ -13,36 +31,30 @@
         <name>header</name>
         <type>Region</type>
     </flexiPageRegions>
-    
-    <!-- Région main pour les détails de l'enregistrement -->
     <flexiPageRegions>
         <itemInstances>
             <componentInstance>
-                <componentName>force:highlightsPanel</componentName>
-                <identifier>recordDetails</identifier>
+                <componentName>force:detailPanel</componentName>
+                <identifier>force_detailPanel</identifier>
             </componentInstance>
         </itemInstances>
         <name>main</name>
         <type>Region</type>
     </flexiPageRegions>
-    
-    <!-- Région sidebar pour la carte en lecture seule -->
     <flexiPageRegions>
         <itemInstances>
             <componentInstance>
-                <componentName>c:esriMapViewer</componentName>
+                <componentName>esriMapViewer</componentName>
                 <identifier>readOnlyMapViewer</identifier>
             </componentInstance>
         </itemInstances>
         <name>sidebar</name>
         <type>Region</type>
     </flexiPageRegions>
-    
-    <!-- Template responsive -->
     <masterLabel>Map Area Record Page</masterLabel>
+    <sobjectType>Map_Area__c</sobjectType>
     <template>
         <name>flexipage:recordHomeTemplateDesktop</name>
     </template>
-    <sobjectType>Map_Area__c</sobjectType>
     <type>RecordPage</type>
 </FlexiPage>

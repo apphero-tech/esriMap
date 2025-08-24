@@ -37,6 +37,7 @@
     border: 1px solid var(--lwc-colorBorder, #e5e5e5);
     border-radius: var(--lwc-borderRadiusLarge, 0.5rem);
     box-shadow: var(--lwc-shadowCardBase, 0 2px 2px 0 rgba(0,0,0,0.10));
+    margin-top: var(--lwc-spacingLarge, 1.5rem);
 }
 
 /* Header - SLDS */
@@ -149,7 +150,7 @@
 
 .page-header { margin-bottom: var(--lwc-spacingMedium, 1rem); }
 .page-title {
-    font-size: var(--lwc-fontSizeTextLarge, 1.125rem);
+    font-size: 1.125rem;
     font-weight: 700;
     color: var(--lwc-colorTextDefault, #181818);
     margin-bottom: var(--lwc-spacingSmall, 0.75rem);
@@ -167,20 +168,40 @@
 .primary-buttons {
     display: flex;
     gap: var(--lwc-spacingSmall, 0.5rem);
-    padding: var(--lwc-spacingMedium, 1rem) 0;
-    justify-content: flex-end;
+    padding: var(--lwc-spacingXSmall, 0.25rem) 0; /* encore réduit */
+    justify-content: center;
+    align-items: center;
 }
-.buttons-section { margin-bottom: var(--lwc-spacingLarge, 1.5rem); }
+/* Spacing between buttons and records */
+.buttons-section { margin-bottom: var(--lwc-spacingXSmall, 0.25rem); }
 .btn-primary, .btn-secondary {
     padding: var(--lwc-spacingXSmall, 0.5rem) var(--lwc-spacingMedium, 1rem);
     border-radius: var(--lwc-borderRadiusSmall, 0.25rem);
-    font-size: var(--lwc-fontSizeTextSmall, 0.875rem);
+    font-size: 0.875rem;
     min-height: 2.25rem;
 }
 
 /* Section/card list already styled above */
 .content-section { padding: var(--lwc-spacingMedium, 1rem); margin-bottom: var(--lwc-spacingMedium, 1rem); }
-.section-title { font-size: var(--lwc-fontSizeTextMedium, 1rem); font-weight: 700; color: var(--lwc-colorTextDefault, #181818); margin-bottom: var(--lwc-spacingXSmall, 0.5rem); }
+.section-title { font-size: 1rem; font-weight: 700; color: var(--lwc-colorTextDefault, #181818); margin-bottom: var(--lwc-spacingXSmall, 0.5rem); }
 
 /* Align table action button */
-.table-action-button { padding: var(--lwc-spacingXXSmall, 0.25rem) var(--lwc-spacingXSmall, 0.5rem); min-height: 1.875rem; font-size: var(--lwc-fontSizeTextXSmall, 0.75rem); border-radius: var(--lwc-borderRadiusSmall, 0.25rem); border: 1px solid var(--lwc-colorBorder, #e5e5e5); background: var(--lwc-colorBackgroundAlt, #ffffff); color: var(--lwc-colorTextActionLabel, #0176d3); }
+.table-action-button { padding: var(--lwc-spacingXXSmall, 0.25rem) var(--lwc-spacingXSmall, 0.5rem); min-height: 1.875rem; font-size: 0.75rem; border-radius: var(--lwc-borderRadiusSmall, 0.25rem); border: 1px solid var(--lwc-colorBorder, #e5e5e5); background: var(--lwc-colorBackgroundAlt, #ffffff); color: var(--lwc-colorTextActionLabel, #0176d3); }
+
+/* Espacement simple entre boutons et tableau */
+.primary-buttons {
+    margin-bottom: 24px;
+}
+
+/* Records card full width */
+.slds-card.records-card {
+    width: 100%;
+    max-width: 100%;
+    margin: 0;
+    box-sizing: border-box;
+}
+
+/* Force datatable to fill width */
+.records-card lightning-datatable {
+    width: 100%;
+}

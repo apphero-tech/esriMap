@@ -1,13 +1,31 @@
 .map-container {
     width: 100%;
-    height: 500px;
-    border-radius: 4px;
+    height: 70vh;
+    min-height: 400px;
+    max-height: 800px;
+    border-radius: var(--lwc-borderRadiusMedium, 0.25rem);
     overflow: hidden;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    box-shadow: var(--lwc-shadowCardBase, 0 2px 4px rgba(0,0,0,0.1));
+    border: 1px solid var(--lwc-colorBorder, #e5e5e5);
+}
+
+.map-viewer-card {
+    background: var(--lwc-colorBackgroundAlt, #ffffff);
+    border-radius: var(--lwc-borderRadiusLarge, 0.5rem);
+    box-shadow: var(--lwc-shadowCardBase, 0 2px 2px 0 rgba(0,0,0,0.10));
+    padding: 1rem;
+    margin: 0;
 }
 
 .map-iframe {
     width: 100%;
     height: 100%;
     border: none;
+}
+
+@media (max-width: 768px) {
+    .map-container {
+        height: 50vh;
+        min-height: 300px;
+    }
 }

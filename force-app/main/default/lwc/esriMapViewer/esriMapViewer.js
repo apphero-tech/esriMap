@@ -3,6 +3,8 @@ import getMapAreaGeometry from '@salesforce/apex/MapAreaService.getMapAreaGeomet
 
 export default class EsriMapViewer extends LightningElement {
     @api recordId;
+    isLoading = true;
+    hasGeometry = false;
     
     // Récupérer l'ID de l'enregistrement depuis le contexte de la page
     get currentRecordId() {
@@ -13,6 +15,10 @@ export default class EsriMapViewer extends LightningElement {
     get vfPageUrl() {
         const baseUrl = window.location.origin;
         return `${baseUrl}/apex/ArcGISMap`;
+    }
+
+    get cardTitle() {
+        return this.hasGeometry ? 'Localisation sur la carte' : 'Aucune géométrie disponible';
     }
     
     renderedCallback() {
@@ -32,15 +38,20 @@ export default class EsriMapViewer extends LightningElement {
     // Charger les données géométriques
     async loadGeometryFromRecord() {
         if (!this.currentRecordId) return;
-        
+        this.isLoading = true;
         try {
             const result = await getMapAreaGeometry({ recordId: this.currentRecordId });
-            
             if (result && result.Geometry_JSON__c) {
+                this.hasGeometry = true;
                 this.displayGeometryOnMap(result);
+            } else {
+                this.hasGeometry = false;
             }
         } catch (error) {
-            console.error('Erreur lors du chargement de la géométrie:', error);
+            this.hasGeometry = false;
+            console.error('Erreur géométrie:', error);
+        } finally {
+            this.isLoading = false;
         }
     }
     

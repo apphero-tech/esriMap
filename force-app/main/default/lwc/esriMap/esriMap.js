@@ -299,10 +299,18 @@ export default class EsriMap extends NavigationMixin(LightningElement) {
         window.removeEventListener('message', this.handleMessageFromVF.bind(this));
     }
 
-    // Colonnes dynamiques calculées pour remplir la largeur
-    get tableColumns() {
-        if (this._columns.length) return this._columns;
-        return this.buildColumns(520); // fallback par défaut
+    // Lightning-datatable columns config
+    get columns() {
+        return [
+            { label: 'Nom', fieldName: 'url', type: 'url', initialWidth: 120, typeAttributes: { label: { fieldName: 'name' }, target: '_blank' } },
+            { label: 'Adresse', fieldName: 'address', type: 'text', wrapText: true, initialWidth: 250 },
+            { label: 'Latitude', fieldName: 'latitude', type: 'number', initialWidth: 100, cellAttributes: { alignment: 'left' }, typeAttributes: { minimumFractionDigits: 6, maximumFractionDigits: 6 } },
+            { label: 'Longitude', fieldName: 'longitude', type: 'number', initialWidth: 100, cellAttributes: { alignment: 'left' }, typeAttributes: { minimumFractionDigits: 6, maximumFractionDigits: 6 } },
+            { label: 'Type', fieldName: 'type', type: 'text', initialWidth: 80 },
+            { label: 'Créé par', fieldName: 'createdByName', type: 'text', initialWidth: 120 },
+            { label: 'Date', fieldName: 'createdDate', type: 'date-local', initialWidth: 140, typeAttributes: { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' } },
+            { type: 'action', typeAttributes: { rowActions: [ { label: 'Voir sur la carte', name: 'view_on_map' } ] }, initialWidth: 90 }
+        ];
     }
 
     get tableRows() {
