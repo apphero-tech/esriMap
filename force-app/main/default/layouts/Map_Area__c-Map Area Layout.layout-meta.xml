@@ -14,10 +14,7 @@
                 <behavior>Required</behavior>
                 <field>Area_Type__c</field>
             </layoutItems>
-            <layoutItems>
-                <behavior>Required</behavior>
-                <field>Name__c</field>
-            </layoutItems>
+            
         </layoutColumns>
         <layoutColumns>
             <layoutItems>

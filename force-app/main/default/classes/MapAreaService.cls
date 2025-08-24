@@ -128,21 +128,6 @@ public with sharing class MapAreaService {
                 Map_Area__c mapArea = new Map_Area__c();
                 
                 // Le champ Name standard (Auto Number) est géré par Salesforce.
-                // Si un ancien champ Name__c existe encore dans l'org et est requis,
-                // le renseigner dynamiquement pour éviter REQUIRED_FIELD_MISSING pendant la transition.
-                try {
-                    Map<String, Schema.SObjectField> fieldMap = Schema.sObjectType.Map_Area__c.fields.getMap();
-                    if (fieldMap.containsKey('Name__c')) {
-                        Schema.DescribeFieldResult d = fieldMap.get('Name__c').getDescribe();
-                        if (d.isCreateable()) {
-                            String fallbackName = String.isNotBlank(shapeData.address)
-                                ? shapeData.address.left(255)
-                                : 'Area ' + Datetime.now().format('yyyy-MM-dd HH:mm:ss');
-                            // Utiliser set dynamique pour éviter les références compile-time
-                            mapArea.put('Name__c', fallbackName);
-                        }
-                    }
-                } catch (Exception ignore) {}
                 
                 // Valider et assigner le type
                 if (isValidAreaType(shapeData.areaType)) {
