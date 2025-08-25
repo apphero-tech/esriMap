@@ -1,0 +1,21 @@
+.map-container {
+    width: 100%;
+    height: 520px;
+    border-radius: var(--lwc-borderRadius, 0.25rem);
+    border: 1px solid var(--lwc-colorBorder);
+    overflow: hidden;
+}
+
+.map-iframe {
+    width: 100%;
+    height: 100%;
+    border: none;
+    overflow: hidden;
+}
+
+.esri-editor {
+    background: var(--lwc-colorBackgroundAlt, #ffffff);
+}
+
+
+

@@ -10,16 +10,34 @@
         <name>ListView</name>
     </types>
     <types>
-        <members>ESRI_Map</members>
-        <name>CustomApplication</name>
+        <members>ArcGIS_World_Geocoding</members>
+        <members>ArcGIS_Maps_SDK</members>
+        <name>RemoteSiteSetting</name>
+    </types>
+
+    <types>
+        <members>ArcGISMap</members>
+        <name>ApexPage</name>
     </types>
     <types>
-        <members>Map_Area__c</members>
-        <name>CustomTab</name>
+        <members>esriMapEditor</members>
+        <members>esriMapViewer</members>
+        <name>LightningComponentBundle</name>
     </types>
     <types>
-        <members>Map_Area_Record_Page</members>
-        <name>FlexiPage</name>
+        <members>MapAreaService</members>
+        <name>ApexClass</name>
     </types>
+    <types>
+        <members>ArcGIS_Tool_Settings__c</members>
+        <name>CustomObject</name>
+    </types>
+    <types>
+        <members>esriMap_Admin</members>
+        <members>esriMap_External</members>
+        <members>esriMap_Internal</members>
+        <name>PermissionSet</name>
+    </types>
+
     <version>64.0</version>
 </Package>

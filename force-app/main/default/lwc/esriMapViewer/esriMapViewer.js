@@ -65,6 +65,11 @@ export default class EsriMapViewer extends LightningElement {
                 latitude: mapAreaData.Latitude__c,
                 longitude: mapAreaData.Longitude__c,
                 address: mapAreaData.Address__c,
+                autoCenter: true,
+                centerCoordinates: {
+                    latitude: mapAreaData.Latitude__c,
+                    longitude: mapAreaData.Longitude__c
+                },
                 readOnlyMode: true
             }
         };

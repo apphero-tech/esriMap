@@ -1,0 +1,46 @@
+<template>
+    <section class="slds-card slds-p-around_medium esri-editor">
+        <header class="slds-grid slds-grid_vertical-align-center slds-m-bottom_small">
+            <h2 class="slds-text-heading_small slds-truncate" title="Éditeur de carte ArcGIS">
+                Éditeur de carte ArcGIS
+            </h2>
+            <div class="slds-col_bump-left">
+                <template if:true={showSaveButton}>
+                    <button class="slds-button slds-button_brand" onclick={handleSave} disabled={isSaveButtonDisabled}>
+                        <template if:true={saving}>Sauvegarde...</template>
+                        <template if:false={saving}>Sauvegarder</template>
+                    </button>
+                </template>
+            </div>
+        </header>
+
+        <div class="map-container">
+            <iframe
+                class="map-iframe"
+                title="ArcGIS Editor"
+                src={vfPageUrl}
+                onload={onIframeLoad}
+                sandbox="allow-scripts allow-same-origin allow-forms">
+            </iframe>
+        </div>
+
+        <!-- Tableau des enregistrements créés -->
+        <template if:true={hasCreatedRecords}>
+            <div class="slds-card slds-m-top_medium">
+                <div class="slds-card__header">
+                    <h3 class="slds-card__header-title">Enregistrements créés</h3>
+                </div>
+                <div class="slds-card__body slds-card__body_inner">
+                    <lightning-datatable
+                        data={tableRows}
+                        columns={columns}
+                        key-field="id"
+                        onrowaction={handleRowAction}
+                        hide-checkbox-column>
+                    </lightning-datatable>
+                </div>
+            </div>
+        </template>
+    </section>
+</template>
+

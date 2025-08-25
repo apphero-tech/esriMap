@@ -1,13 +1,28 @@
 {
-  "orgName": "jerome company",
+  "orgName": "ArcGIS Map Development Org",
   "edition": "Developer",
-  "features": ["EnableSetPasswordInApi"],
+  "features": [
+    "EnableSetPasswordInApi",
+    "Communities",
+    "CustomerCommunity",
+    "CustomerCommunityPlus",
+    "EnablePRM"
+  ],
   "settings": {
     "lightningExperienceSettings": {
       "enableS1DesktopEnabled": true
     },
     "mobileSettings": {
       "enableS1EncryptedStoragePref2": false
+    },
+    "communitiesSettings": {
+      "enableNetworksEnabled": true
+    },
+    "experienceBundleSettings": {
+      "enableExperienceBundleMetadata": true
+    },
+    "languageSettings": {
+      "enableTranslationWorkbench": true
     }
   }
 }

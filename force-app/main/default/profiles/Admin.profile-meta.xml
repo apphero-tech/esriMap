@@ -1,19 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Profile xmlns="http://soap.sforce.com/2006/04/metadata">
-    <applicationVisibilities>
-        <application>ESRI_Map</application>
-        <default>true</default>
-        <visible>true</visible>
-    </applicationVisibilities>
-    <tabVisibilities>
-        <tab>Map_Area__c</tab>
-        <visibility>DefaultOn</visibility>
-    </tabVisibilities>
-    <recordTypeVisibilities>
-        <default>true</default>
-        <personAccountDefault>false</personAccountDefault>
-        <recordType>Map_Area__c.Master</recordType>
-        <visible>true</visible>
-    </recordTypeVisibilities>
+
 
 </Profile>

@@ -1,91 +1,35 @@
-<apex:page showHeader="false" sidebar="false" standardStylesheets="false" docType="html-5.0">
-    <!-- Support Visualforce Remoting -->
-    <apex:remoteObjects>
-        <apex:remoteObjectModel name="ArcGIS_Tool_Settings__c" fields="Name,Tool_Type__c,Is_Enabled__c" />
-    </apex:remoteObjects>
-    
+<apex:page showHeader="false" sidebar="false" standardStylesheets="false">
     <html>
     <head>
         <meta charset="utf-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <meta name="viewport" content="initial-scale=1, maximum-scale=1, user-scalable=no" />
         <title>ArcGIS Map</title>
-        
-        <!-- ArcGIS Maps SDK 4.33 -->
-        <link rel="stylesheet" href="https://js.arcgis.com/4.33/esri/themes/light/main.css" />
-        <script src="https://js.arcgis.com/4.33/init.js"></script>
-        
         <style>
-            html, body, #viewDiv {
-                padding: 0;
-                margin: 0;
+            html, body, #mapView {
                 height: 100%;
                 width: 100%;
-                font-family: 'Avenir Next', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+                margin: 0;
+                padding: 0;
             }
-            
-            /* Espace entre Zoom et Locate lorsqu'ils sont en bas à gauche */
-            .esri-ui-bottom-left .esri-locate { margin-top: 8px; }
-            
-            /* Style pour le widget Search */
-            .esri-search {
-                width: 300px;
-                max-width: 90vw;
+            #mapView {
+                position: relative;
             }
-            
-            .esri-search__input {
-                border-radius: 6px;
-                border: 2px solid #e1e5e9;
-                font-size: 14px;
-                padding: 8px 12px;
-                transition: border-color 0.2s ease;
-            }
-            
-            .esri-search__input:focus {
-                border-color: #0079c1;
-                outline: none;
-                box-shadow: 0 0 0 3px rgba(0, 121, 193, 0.1);
-            }
-            
-            .esri-search__suggestions {
-                border-radius: 6px;
-                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-                border: 1px solid #e1e5e9;
-            }
-            
-            .esri-search__suggestion {
-                padding: 10px 12px;
-                border-bottom: 1px solid #f0f0f0;
-                cursor: pointer;
-                transition: background-color 0.2s ease;
-            }
-            
-            .esri-search__suggestion:hover {
-                background-color: #f8f9fa;
-            }
-            
-            .esri-search__suggestion:last-child {
-                border-bottom: none;
-            }
-
-            /* Masquer tous les contrôles ArcGIS (lecture seule) sauf Zoom */
-            .esri-ui-corner,
-            .esri-search,
-            .esri-search-*,
-            .esri-compass,
-            .esri-compass-*,
-            .esri-locate,
-            .esri-locate-*,
-            .esri-basemap-toggle,
-            .esri-basemap-toggle-*,
-            .esri-sketch,
-            .esri-sketch-*,
-            .esri-ui-manual-container { display: none !important; }
         </style>
-    </head>
-    <body>
-        <div id="viewDiv"></div>
+        
+        <!-- ArcGIS Maps SDK 4.25 -->
+        <link rel="stylesheet" href="https://js.arcgis.com/4.25/esri/themes/light/main.css" />
+        <script src="https://js.arcgis.com/4.25/"></script>
         
         <script>
+            console.log('🚀 Script ArcGIS chargé - début');
+            console.log('🔗 Test de connexion vers js.arcgis.com...');
+            console.log('📅 Timestamp:', new Date().toISOString());
+        </script>
+        
+        <script>
+            console.log('📦 Modules AMD chargés - début');
+            
+            // Chargement des modules ArcGIS via AMD
             require([
                 "esri/Map",
                 "esri/views/MapView",
@@ -102,2201 +46,314 @@
                 "esri/layers/GraphicsLayer",
                 "esri/geometry/geometryEngine",
                 "esri/geometry/support/webMercatorUtils",
+                "esri/geometry/Extent",
                 "esri/core/reactiveUtils"
-            ], function(Map, MapView, Point, Graphic, SimpleMarkerSymbol, PopupTemplate, Popup, Search, Compass, Locate, BasemapToggle, Sketch, GraphicsLayer, geometryEngine, webMercatorUtils, reactiveUtils) {
+            ], function(
+                Map, MapView, Point, Graphic, SimpleMarkerSymbol, PopupTemplate,
+                Popup, Search, Compass, Locate, BasemapToggle, Sketch,
+                GraphicsLayer, geometryEngine, webMercatorUtils, Extent, reactiveUtils
+            ) {
+                console.log('✅ Tous les modules ArcGIS 4.25 chargés avec succès via AMD');
                 
-                console.log('🗺️ Initialisation ArcGIS dans Visualforce...');
-                
-                // Créer la carte
-                const map = new Map({
-                    basemap: "streets-navigation-vector"
-                });
+                // Variables globales
+                let map, view, sketchWidget, sketchLayer;
+                let isReadOnlyMode = false;
+                let currentDrawingGraphic = null;
 
-                // Créer un GraphicsLayer dédié pour les dessins Sketch
-                const sketchLayer = new GraphicsLayer({
-                    title: "Dessins utilisateur"
-                });
-                map.add(sketchLayer);
-                
-                // Layer pour les formes enregistrées (persistantes le temps de la session)
-                const savedLayer = new GraphicsLayer({
-                    title: "Formes enregistrées"
-                });
-                map.add(savedLayer);
-                
-                // ========================================
-                // FONCTIONNALITÉS MODE LECTURE SEULE
-                // ========================================
-                
-                // Fonction pour afficher une géométrie en mode lecture seule
-                function displayReadOnlyGeometry(data) {
-                    console.log('📍 Affichage géométrie en mode lecture seule:', data);
-                    
+                // Initialisation de la carte
+                async function initializeMap() {
                     try {
-                        // Mettre à jour le mode global
-                        window.isReadOnlyMode = data.readOnlyMode || false;
-                        console.log('🔒 Mode lecture seule activé:', window.isReadOnlyMode);
+                        console.log('🗺️ Initialisation de la carte ArcGIS...');
                         
-                        // Gérer l'interface en mode lecture seule
-                        if (window.isReadOnlyMode) {
-                            toggleReadOnlyInterface(true);
-                        }
-                        
-                        const geometryData = data.geometry || data.geometryData;
-                        const feature = typeof geometryData === 'string' ? JSON.parse(geometryData) : geometryData;
-                        
-                        // Effacer les graphiques existants
-                        sketchLayer.removeAll();
-                        
-                        let graphic = null;
-                        
-                        // Créer le graphique selon le type de géométrie
-                        // Utiliser d'abord Area_Type__c du LWC, puis les propriétés GeoJSON
-                        const geometryType = data.areaType || feature.properties.originalType || feature.properties.shapeType;
-                        console.log('🔍 Type de géométrie détecté:', geometryType);
-                        
-                        switch (geometryType) {
-                            case 'Circle':
-                                graphic = createReadOnlyCircleGraphic(feature, data.centerCoordinates);
-                                break;
-                            case 'Point':
-                                graphic = createReadOnlyPointGraphic(feature);
-                                break;
-                            case 'Polygon':
-                                graphic = createReadOnlyPolygonGraphic(feature);
-                                break;
-                            case 'Polyline':
-                                graphic = createReadOnlyPolylineGraphic(feature);
-                                break;
-                            case 'Rectangle':
-                                graphic = createReadOnlyRectangleGraphic(feature);
-                                break;
-                            default:
-                                console.warn('⚠️ Type de géométrie non supporté:', geometryType);
-                                console.log('🔍 Données reçues:', data);
-                                console.log('🔍 Feature GeoJSON:', feature);
-                        }
-                        
-                        // Si latitude/longitude fournies, forcer un point unique centré
-                        if (data && typeof data.latitude === 'number' && typeof data.longitude === 'number') {
-                            const pointGraphic = new Graphic({
-                                geometry: new Point({ longitude: data.longitude, latitude: data.latitude }),
-                                symbol: {
-                                    type: "simple-marker",
-                                    color: [51, 153, 255, 0.8],
-                                    outline: { color: [255, 255, 255, 1], width: 2 },
-                                    size: 12
+                        // Créer la carte
+                        map = new Map({
+                            basemap: "streets-vector"
+                        });
+
+                        // Créer la vue
+                        view = new MapView({
+                            container: "mapView",
+                            map: map,
+                            center: [-0.1276, 51.5074], // Londres par défaut
+                            zoom: 10,
+                            // DÉSACTIVER le zoom clavier pour éviter le conflit avec Chrome
+                            constraints: {
+                                keyboardNavigation: {
+                                    enabled: false
                                 }
-                            });
-                            sketchLayer.add(pointGraphic);
-                            view.goTo({ target: pointGraphic.geometry, zoom: 16 }, { duration: 600 }).then(() => {
-                                try {
-                                    // Figer la carte (pas de pan) avec un extent autour du point
-                                    if (view && view.constraints) {
-                                        const lon = pointGraphic.geometry.longitude;
-                                        const lat = pointGraphic.geometry.latitude;
-                                        const delta = 0.0002; // env. ~20m, selon SR
-                                        const extent = new Extent({ xmin: lon - delta, ymin: lat - delta, xmax: lon + delta, ymax: lat + delta, spatialReference: { wkid: 4326 } });
-                                        view.constraints = {
-                                            rotationEnabled: false,
-                                            snapToZoom: true,
-                                            geometry: extent
-                                        };
-                                    }
-                                    if (view && view.navigation) {
-                                        // Désactiver zoom molette et pan tactile/ clavier
-                                        view.navigation.mouseWheelZoomEnabled = false;
-                                        view.navigation.browserTouchPanEnabled = false;
-                                        view.navigation.gamepadEnabled = false;
-                                        view.navigation.keyboardEnabled = false;
-                                    }
-                                    view.on("drag", function(evt){ evt.stopPropagation(); });
-                                    view.on("mouse-wheel", function(evt){ evt.stopPropagation(); });
-                                    view.on("double-click", function(evt){ evt.stopPropagation(); });
-                                    view.on("pointer-down", function(evt){ if (window.isReadOnlyMode) evt.stopPropagation(); });
-                                    view.on("immediate-click", function(evt){ evt.stopPropagation(); });
-                                    view.on("pointer-move", function(evt){ evt.stopPropagation(); });
-
-                                    // Ne pas bloquer les raccourcis de zoom du navigateur pour éviter les crashes Chrome
-                                } catch (freezeErr) { console.warn('⚠️ Erreur lors du gel de la carte:', freezeErr); }
-                            });
-                            // Activer l'interface lecture seule
-                            toggleReadOnlyInterface(true);
-                            console.log('✅ Point centré en lecture seule');
-                            return;
-                        }
-
-                        if (graphic) {
-                            // Ajouter à la carte avec style lecture seule
-                            sketchLayer.add(graphic);
-                            
-                            // Centrer la vue si demandé
-                            if (data && data.autoCenter) {
-                                const extent = graphic.geometry.extent || graphic.geometry;
-                                view.goTo({
-                                    target: extent,
-                                    zoom: extent.type === 'point' ? 16 : undefined
-                                }).then(() => {
-                                    console.log('✅ Vue centrée sur la géométrie');
-                                    try {
-                                        if (view && view.constraints && graphic) {
-                                            const geom = graphic.geometry;
-                                            const extentGeom = geom.extent ? geom.extent : geom;
-                                            view.constraints = {
-                                                rotationEnabled: false,
-                                                snapToZoom: true,
-                                                geometry: extentGeom
-                                            };
-                                        }
-                                        if (view && view.navigation) {
-                                            view.navigation.mouseWheelZoomEnabled = false;
-                                            view.navigation.browserTouchPanEnabled = false;
-                                            view.navigation.gamepadEnabled = false;
-                                            view.navigation.keyboardEnabled = false;
-                                        }
-                                        view.on("drag", function(evt){ evt.stopPropagation(); });
-                                        view.on("mouse-wheel", function(evt){ evt.stopPropagation(); });
-                                        view.on("double-click", function(evt){ evt.stopPropagation(); });
-                                        view.on("pointer-down", function(evt){ if (window.isReadOnlyMode) evt.stopPropagation(); });
-                                        view.on("immediate-click", function(evt){ evt.stopPropagation(); });
-                                        view.on("pointer-move", function(evt){ evt.stopPropagation(); });
-
-                                        // Ne pas installer de hook clavier global pour éviter les crashes
-                                    } catch (freezeErr) { console.warn('⚠️ Erreur lors du gel de la carte:', freezeErr); }
-                                });
+                            },
+                            // DÉSACTIVER les raccourcis clavier ArcGIS
+                            popup: {
+                                dockEnabled: false
                             }
-                            
-                            // Désactiver les outils de dessin en mode lecture seule
-                            if (window.sketchWidget) {
-                                window.sketchWidget.cancel();
-                                window.sketchWidget.view = null; // Désactiver complètement
-                            }
-                            
-                            console.log('✅ Géométrie affichée en mode lecture seule');
-                        }
+                        });
+
+                        // Attendre que la vue soit prête
+                        await view.when();
+                        console.log('✅ Vue de carte initialisée');
+
+                        // Créer la couche de dessin
+                        sketchLayer = new GraphicsLayer();
+                        map.add(sketchLayer);
+
+                        // Initialiser les widgets
+                        await initializeWidgets();
+                        
+                        // Charger la configuration des outils
+                        await loadDrawingToolsConfig();
+                        
+                        // Configurer la communication postMessage
+                        setupPostMessageCommunication();
+                        
+                        // Notifier que la carte est prête
+                        notifyMapReady();
                         
                     } catch (error) {
-                        console.error('❌ Erreur affichage géométrie lecture seule:', error);
+                        console.error('❌ Erreur initialisation carte:', error);
                     }
                 }
-                
-                // Fonction pour créer un cercle en lecture seule
-                function createReadOnlyCircleGraphic(feature, centerCoordinates) {
-                    const radius = feature.properties.radius;
-                    let center;
-                    
-                    // Utiliser les coordonnées du centre si disponibles
-                    if (centerCoordinates && centerCoordinates.latitude && centerCoordinates.longitude) {
-                        center = [centerCoordinates.longitude, centerCoordinates.latitude];
-                    } else if (feature.geometry.coordinates && feature.geometry.coordinates[0] && feature.geometry.coordinates[1]) {
-                        center = feature.geometry.coordinates;
-                    } else {
-                        console.warn('⚠️ Coordonnées du centre manquantes pour le cercle');
-                        return null;
-                    }
-                    
-                    // Créer le cercle
-                    const circle = new geometryEngine.geodesicBuffer(
-                        new Point({
-                            longitude: center[0],
-                            latitude: center[1]
-                        }),
-                        radius,
-                        'meters'
-                    );
-                    
-                    return new Graphic({
-                        geometry: circle,
-                        symbol: {
-                            type: "simple-fill",
-                            color: [51, 153, 255, 0.3], // Bleu clair transparent
-                            outline: {
-                                color: [51, 153, 255, 0.8], // Bleu plus foncé
-                                width: 2
-                            }
-                        }
-                    });
-                }
-                
-                // Fonction pour créer un point en lecture seule
-                function createReadOnlyPointGraphic(feature) {
-                    const coords = feature.geometry.coordinates;
-                    
-                    return new Graphic({
-                        geometry: new Point({
-                            longitude: coords[0],
-                            latitude: coords[1]
-                        }),
-                        symbol: {
-                            type: "simple-marker",
-                            color: [51, 153, 255, 0.8],
-                            outline: {
-                                color: [51, 153, 255, 1],
-                                width: 2
-                            },
-                            size: 12
-                        }
-                    });
-                }
-                
-                // Fonction pour créer un polygone en lecture seule
-                function createReadOnlyPolygonGraphic(feature) {
-                    return new Graphic({
-                        geometry: {
-                            type: "polygon",
-                            rings: feature.geometry.coordinates
-                        },
-                        symbol: {
-                            type: "simple-fill",
-                            color: [51, 153, 255, 0.3],
-                            outline: {
-                                color: [51, 153, 255, 0.8],
-                                width: 2
-                            }
-                        }
-                    });
-                }
-                
-                // Fonction pour créer une polyligne en lecture seule
-                function createReadOnlyPolylineGraphic(feature) {
-                    return new Graphic({
-                        geometry: {
-                            type: "polyline",
-                            paths: feature.geometry.coordinates
-                        },
-                        symbol: {
-                            type: "simple-line",
-                            color: [51, 153, 255, 0.8],
-                            width: 3
-                        }
-                    });
-                }
-                
-                // Fonction pour créer un rectangle en lecture seule
-                function createReadOnlyRectangleGraphic(feature) {
-                    // Les rectangles sont stockés comme des polygones
-                    return createReadOnlyPolygonGraphic(feature);
-                }
-                
-                // Fonction pour gérer l'interface en mode lecture seule
-                function toggleReadOnlyInterface(isReadOnly) {
-                    console.log('🔒 Gestion interface mode lecture seule:', isReadOnly);
-                    
-                    if (isReadOnly) {
-                        // Mode lecture seule : supprimer les composants UI et widgets
-                        console.log('🔒 Suppression des widgets en mode lecture seule');
-                        try { if (typeof view !== 'undefined' && view && view.ui) { view.ui.components = ["zoom"]; } } catch (e) {}
-                        // Retirer explicitement les widgets ajoutés à l'UI (on garde uniquement Zoom via components)
-                        try { if (searchWidget) { view.ui.remove(searchWidget); } } catch (e) {}
-                        try { if (compassWidget) { view.ui.remove(compassWidget); } } catch (e) {}
-                        try { if (locateWidget) { view.ui.remove(locateWidget); } } catch (e) {}
-                        try { if (basemapToggleWidget) { view.ui.remove(basemapToggleWidget); } } catch (e) {}
-                        try { if (window.sketchWidget) { view.ui.remove(window.sketchWidget); } } catch (e) {}
-                        
-                        // Masquer le widget Search
-                        if (searchWidget && searchWidget.container) {
-                            searchWidget.container.style.display = 'none';
-                        }
-                        
-                        // Masquer le widget Compass
-                        if (compassWidget && compassWidget.container) {
-                            compassWidget.container.style.display = 'none';
-                        }
-                        
-                        // Masquer le widget Locate
-                        if (locateWidget && locateWidget.container) {
-                            locateWidget.container.style.display = 'none';
-                        }
-                        
-                        // Masquer le widget BasemapToggle
-                        if (basemapToggleWidget && basemapToggleWidget.container) {
-                            basemapToggleWidget.container.style.display = 'none';
-                        }
-                        
-                        // Masquer le widget Sketch
-                        if (window.sketchWidget && window.sketchWidget.container) {
-                            window.sketchWidget.container.style.display = 'none';
-                        }
-                        
-                        console.log('✅ Widgets masqués en mode lecture seule');
-                        
-                    } else {
-                        // Mode édition : afficher tous les widgets
-                        console.log('✏️ Affichage des widgets en mode édition');
-                        
-                        // Afficher le widget Search
-                        if (searchWidget && searchWidget.container) {
-                            searchWidget.container.style.display = 'block';
-                        }
-                        
-                        // Afficher le widget Compass
-                        if (compassWidget && compassWidget.container) {
-                            compassWidget.container.style.display = 'block';
-                        }
-                        
-                        // Afficher le widget Locate
-                        if (locateWidget && locateWidget.container) {
-                            locateWidget.container.style.display = 'block';
-                        }
-                        
-                        // Afficher le widget BasemapToggle
-                        if (basemapToggleWidget && basemapToggleWidget.container) {
-                            basemapToggleWidget.container.style.display = 'block';
-                        }
-                        
-                        // Afficher le widget Sketch
-                        if (window.sketchWidget && window.sketchWidget.container) {
-                            window.sketchWidget.container.style.display = 'block';
-                        }
-                        
-                        console.log('✅ Widgets affichés en mode édition');
-                    }
-                }
-                
-                // Créer la vue
-                const view = new MapView({
-                    container: "viewDiv",
-                    map: map,
-                    center: [-73.5673, 45.5017], // Place Ville-Marie, Montréal
-                    zoom: 15,
-                    constraints: {
-                        rotationEnabled: true, // Activer la rotation pour le Compass
-                        rotationAngle: 0 // Commencer avec l'orientation nord
-                    }
-                });
-                
-                // ========================================
-                // ÉCOUTEUR DE MESSAGES POUR MODE LECTURE SEULE
-                // ========================================
-                
-                // Écouter les messages du composant LWC pour le mode lecture seule
-                window.addEventListener('message', function(event) {
-                    if (event.data && event.data.type === 'DISPLAY_READONLY_GEOMETRY') {
-                        console.log('📨 Message reçu du LWC:', event.data);
-                        var payload = (event.data && event.data.data) ? event.data.data : event.data;
-                        try { window.isReadOnlyMode = !!(payload && payload.readOnlyMode); } catch (e) {}
-                        displayReadOnlyGeometry(payload);
-                    }
-                });
 
-                // Créer et configurer le widget Search avec autocomplétion (sans géolocalisation)
-                const searchWidget = new Search({
-                    view: view,
-                    sources: [{
-                        url: "https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer",
-                        singleLineFieldName: "SingleLine",
-                        name: "ArcGIS World Geocoding Service",
-                        countryCode: "CAN", // Priorité au Canada
-                        maxResults: 10,
-                        maxSuggestions: 8,
-                        minSuggestCharacters: 1,
-                        searchExtent: view.extent
-                    }],
-                    autoComplete: true,
-                    searchAllEnabled: false, // Désactiver la recherche globale pour éviter la géolocalisation
-                    includeDefaultSources: false, // Exclure les sources par défaut (incluant géolocalisation)
-                    locationEnabled: false, // Désactiver explicitement la géolocalisation dans Search
-                    popupEnabled: false, // On gère nos propres popups
-                    resultGraphicEnabled: false, // On gère nos propres graphics
-                    container: "searchContainer"
-                });
-                
-                // Variable globale pour le mode lecture seule
-                window.isReadOnlyMode = false;
-
-                // Créer et configurer le widget Compass (navigation)
-                const compassWidget = new Compass({
-                    view: view,
-                    label: "Réinitialiser l'orientation nord"
-                });
-
-                // Écouter les changements de rotation pour informer l'utilisateur
-                reactiveUtils.watch(() => view.rotation, function(rotation) {
-                    if (Math.abs(rotation) > 1) { // Si rotation significative
-                        console.log('🧭 Carte tournée de', rotation.toFixed(1), 'degrés');
-                        console.log('💡 Cliquez sur le compass pour remettre au nord');
-                    }
-                });
-
-                // Écouter les clics sur le compass
-                compassWidget.on("click", function() {
-                    console.log('🧭 Compass cliqué - orientation remise au nord');
-                });
-
-                // Créer et configurer le widget Locate (géolocalisation native ArcGIS)
-                const locateWidget = new Locate({
-                    view: view,
-                    label: "Ma position",
-                    useHeadingEnabled: true,
-                    goToOverride: function(view, options) {
-                        // Personnaliser le comportement de navigation vers la position
-                        view.goTo({
-                            target: options.target,
-                            zoom: 18, // Zoom plus proche pour la position utilisateur
-                            duration: 1000
-                        });
-                    }
-                });
-
-                // Créer et configurer le widget BasemapToggle (changement de fond de carte)
-                const basemapToggleWidget = new BasemapToggle({
-                    view: view,
-                    nextBasemap: "satellite", // Vue satellite comme alternative
-                    label: "Basculer vers satellite"
-                });
-
-                // NOUVELLE APPROCHE: Créer le widget Sketch SANS l'attacher à la vue
-                // Cela préserve le comportement natif ArcGIS par défaut
-                console.log('🎯 Mode NATIF ArcGIS activé - géocodage sur clic disponible');
-                
-                // Variable globale pour le widget (créé mais pas attaché)
-                window.sketchWidget = null;
-                window.sketchConfig = null;
-                
-                // Charger la configuration et créer le widget Sketch automatiquement
-                loadDrawingToolsConfig().then(config => {
-                    console.log('🔧 Configuration des outils chargée:', config);
-                    
-                    // Stocker la configuration pour utilisation ultérieure
-                    window.sketchConfig = config;
-                    console.log('📋 Configuration stockée - création automatique du widget Sketch');
-                    
-                    // En lecture seule, ne pas créer/ajouter le widget Sketch
-                    if (!window.isReadOnlyMode) {
-                        // CRÉER AUTOMATIQUEMENT LE WIDGET SKETCH AVEC LA CONFIGURATION
-                        createAndActivateSketchWidget();
-                    } else {
-                        console.log('🔒 Lecture seule active - widget Sketch non créé');
-                    }
-                    
-                }).catch(error => {
-                    console.error('❌ Erreur lors du chargement de la configuration:', error);
-                    
-                    // Configuration par défaut en cas d'erreur
-                    window.sketchConfig = {
-                        pointTool: true,
-                        polylineTool: true,
-                        polygonTool: true,
-                        rectangleTool: true,
-                        circleTool: true,
-                        lassoSelection: false,
-                        rectangleSelection: false
-                    };
-                    console.log('📋 Configuration par défaut stockée');
-                });
-
-                // Fonction pour charger la configuration des outils depuis Custom Settings List
-                function loadDrawingToolsConfig() {
-                    return new Promise((resolve, reject) => {
-                        try {
-                            console.log('🔧 Chargement de la configuration depuis Custom Settings List via Remote Objects...');
-                            
-                            // Utiliser Remote Objects pour récupérer la configuration
-                            const toolSettings = new SObjectModel.ArcGIS_Tool_Settings__c();
-                            
-                            toolSettings.retrieve({}, function(error, records) {
-                                if (error) {
-                                    console.error('❌ Erreur lors de la récupération des Custom Settings:', error);
-                                    
-                                    // Configuration par défaut en cas d'erreur
-                                    const defaultConfig = {
-                                        pointTool: false,
-                                        polylineTool: false,
-                                        polygonTool: false,
-                                        rectangleTool: true,        // DÉFAUT: activé
-                                        circleTool: true,           // DÉFAUT: activé
-                                        lassoSelection: false,
-                                        rectangleSelection: false
-                                    };
-                                    
-                                    console.log('⚠️ Utilisation de la configuration par défaut:', defaultConfig);
-                                    resolve(defaultConfig);
-                                } else {
-                                    console.log('✅ Custom Settings récupérés:', records);
-                                    
-                                    // Mapper les enregistrements vers la configuration
-                                    const config = {
-                                        pointTool: false,
-                                        polylineTool: false,
-                                        polygonTool: false,
-                                        rectangleTool: false,
-                                        circleTool: false,
-                                        lassoSelection: false,
-                                        rectangleSelection: false
-                                    };
-                                    
-                                    records.forEach(record => {
-                                        const toolType = record.get('Tool_Type__c');
-                                        const isEnabled = record.get('Is_Enabled__c');
-                                        
-                                        console.log(`🔧 Outil: ${record.get('Name')} (${toolType}) = ${isEnabled}`);
-                                        
-                                        switch(toolType) {
-                                            case 'point':
-                                                config.pointTool = isEnabled;
-                                                break;
-                                            case 'polyline':
-                                                config.polylineTool = isEnabled;
-                                                break;
-                                            case 'polygon':
-                                                config.polygonTool = isEnabled;
-                                                break;
-                                            case 'rectangle':
-                                                config.rectangleTool = isEnabled;
-                                                break;
-                                            case 'circle':
-                                                config.circleTool = isEnabled;
-                                                break;
-                                            case 'lasso-selection':
-                                                config.lassoSelection = isEnabled;
-                                                break;
-                                            case 'rectangle-selection':
-                                                config.rectangleSelection = isEnabled;
-                                                break;
-                                        }
-                                    });
-                                    
-                                    console.log('🎨 Configuration finale:', config);
-                                    resolve(config);
-                                }
-                            });
-                            
-                        } catch (error) {
-                            console.error('❌ Erreur lors du chargement de la configuration:', error);
-                            
-                            // Configuration par défaut en cas d'erreur
-                            resolve({
-                                pointTool: false,
-                                polylineTool: false,
-                                polygonTool: false,
-                                rectangleTool: true,        // DÉFAUT: activé
-                                circleTool: true,           // DÉFAUT: activé
-                                lassoSelection: false,
-                                rectangleSelection: false
-                            });
-                        }
-                    });
-                }
-                
-
-                
-                // Fonction pour créer et activer le widget Sketch à la demande
-                function createAndActivateSketchWidget() {
-                    console.log('🎨 Création du widget Sketch avec configuration Custom Settings...');
-                    
-                    if (window.sketchWidget) {
-                        console.log('⚠️ Widget Sketch déjà créé');
-                        return window.sketchWidget;
-                    }
-                    
-                    if (!window.sketchConfig) {
-                        console.error('❌ Configuration non disponible');
-                        return null;
-                    }
-                    
-                    console.log('🔧 Configuration appliquée au widget Sketch:', window.sketchConfig);
-                    
-                    // Créer le widget avec la configuration stockée
-                const sketchWidget = new Sketch({
-                    view: view,
-                    layer: sketchLayer,
-                        creationMode: "hybrid",
-                        defaultUpdateOptions: { 
-                            enableRotation: false,
-                            enableScaling: false,
-                            preserveAspectRatio: true
-                        },
-                    label: "Outils de dessin ArcGIS",
-                    visibleElements: {
-                        createTools: {
-                                point: window.sketchConfig.pointTool,
-                                polyline: window.sketchConfig.polylineTool,
-                                polygon: window.sketchConfig.polygonTool,
-                                rectangle: window.sketchConfig.rectangleTool,
-                                circle: window.sketchConfig.circleTool
-                        },
-                        selectionTools: {
-                                "lasso-selection": window.sketchConfig.lassoSelection,
-                                "rectangle-selection": window.sketchConfig.rectangleSelection
-                        },
-                        undoRedoMenu: true,
-                        settingsMenu: true
-                    }
-                });
-
-                    // Stocker globalement
-                    window.sketchWidget = sketchWidget;
-                    
-                    // Suivre l'état d'activation d'un outil de création
-                    window.isSketchCreateMode = false;
-                    reactiveUtils.watch(() => sketchWidget.activeTool, function(newTool){
-                        window.isSketchCreateMode = !!newTool;
-                        console.log('🛠️ activeTool changé:', newTool, 'createMode =', window.isSketchCreateMode);
-                        if (view && view.popup) {
-                            if (window.isSketchCreateMode) {
-                                // Fermer et désactiver l'auto-ouverture du popup pour ne pas gêner le dessin
-                                if (typeof view.popup.close === 'function') {
-                                    view.popup.close();
-                                } else {
-                                    view.popup.visible = false;
-                                }
-                                view.popup.autoOpenEnabled = false;
-                            } else {
-                                view.popup.autoOpenEnabled = true;
-                            }
-                        }
-                    });
-                    
-                    // AJOUTER LE WIDGET À LA VUE (c'est ce qui manquait !)
-                    view.ui.add(sketchWidget, "bottom-right");
-                    console.log('📍 Widget Sketch ajouté à la vue en bas à droite');
-                    
-                    // Initialiser le widget
-                    initializeSketchWidget(sketchWidget);
-                    
-                    console.log('✅ Widget Sketch créé, ajouté à la vue et activé');
-                    return sketchWidget;
-                }
-                
-                // Fonction pour désactiver et détruire le widget Sketch
-                function deactivateSketchWidget() {
-                    console.log('🗑️ Désactivation du widget Sketch...');
-                    
-                    if (window.sketchWidget) {
-                        // Annuler toute opération en cours
-                        window.sketchWidget.cancel();
-                        
-                        // Détruire le widget
-                        window.sketchWidget.destroy();
-                        window.sketchWidget = null;
-                        
-                        console.log('✅ Widget Sketch désactivé - mode natif ArcGIS restauré');
-                    }
-                }
-                
-                // Fonction pour initialiser le widget Sketch (appelée après création)
-                function initializeSketchWidget(sketchWidget) {
-                // Attendre que le widget soit initialisé
-                sketchWidget.when(() => {
-                    console.log('✅ Widget Sketch initialisé avec succès');
-                        console.log('🎨 Outils configurés selon Custom Settings');
-                        
-                        // ÉTAT INITIAL: FORCÉ EN MODE INACTIF POUR GÉOCODAGE
-                        // Annuler tous les outils actifs et désactiver le widget par défaut
-                        sketchWidget.cancel(); // Annule tout outil de création actif
-                        // sketchWidget.viewModel.state = "ready"; // Force l'état ready (retiré car non assignable)
-                        
-                        console.log('🖱️ Widget Sketch en mode READY - géocodage disponible');
-                        console.log('🔧 État du widget:', sketchWidget.viewModel.state);
-                        
-                        // Configurer les styles de highlight
-                        setupHighlightStyles();
-                    
-                    // Écouter la création de formes
-                    sketchWidget.on("create", function(event) {
-                        console.log('🎨 Forme créée:', event);
-                        if (event.state === "complete") {
-                            handleShapeCreated(event.graphic, event.tool);
-                        }
-                    });
-                    
-                    // Écouter la sélection de formes
-                    sketchWidget.on("select", function(event) {
-                        console.log('🎯 Forme sélectionnée:', event);
-                        if (event.graphics && event.graphics.length > 0) {
-                            console.log('✅ Forme sélectionnée, envoi SHAPE_SELECTED');
-                            handleShapeCreated(event.graphics[0]);
-                        }
-                    });
-                    
-                    // Écouter la désélection de formes
-                    sketchWidget.on("update", function(event) {
-                        console.log('🔄 Forme mise à jour:', event);
-                        if (event.state === "complete" && event.graphics && event.graphics.length > 0) {
-                            console.log('✅ Forme mise à jour, envoi SHAPE_SELECTED');
-                            handleShapeCreated(event.graphics[0], undefined);
-                        }
-                    });
-                    
-                    // Écouter la suppression de formes
-                    sketchWidget.on("delete", function(event) {
-                        console.log('🗑️ Forme supprimée:', event);
-                        handleShapeDeletion();
-                    });
-                    
-                    // Écouter les changements d'état pour activer le bouton Save
-                    sketchWidget.viewModel.on("create", function(event) {
-                        console.log('🎨 Création en cours:', event);
-                        if (event.state === "complete") {
-                            console.log('✅ Création terminée, envoi SHAPE_SELECTED');
-                            handleShapeCreated(event.graphic);
-                        }
-                    });
-                        
-                        // IMPORTANT: Préserver le géocodage sur clic de carte
-                        // Écouter les changements d'outil pour maintenir le géocodage actif
-                        reactiveUtils.watch(() => sketchWidget.viewModel.state, function(newState) {
-                            console.log('🔧 État du widget Sketch changé:', newState);
-                            
-                            // Si aucun outil de création n'est actif, le géocodage reste disponible
-                            if (newState === "ready" || newState === "disabled") {
-                                console.log('🖱️ Curseur de navigation/géocodage disponible');
-                                // La carte peut recevoir les clics pour le géocodage
-                            }
-                    });
-                });
-                    
-                    // Rendre le sketchWidget disponible globalement pour les autres fonctions
-                    window.sketchWidget = sketchWidget;
-                    
-                    // Vérifier s'il y a des formes existantes pour activer le bouton Save
-                    setTimeout(() => {
-                        activateSaveButtonIfShapesExist();
-                    }, 1000);
-                }
-                
-                // Fonction pour gérer la création d'une forme
-                function handleShapeCreated(graphic, tool) {
-                    console.log('🎨 Nouvelle forme créée:', graphic);
-                    
-                    // Notifier le LWC qu'une forme est disponible
-                    if (window.parent) {
-                        window.parent.postMessage({
-                            type: 'SHAPE_SELECTED',
-                            shape: extractShapeInfo(graphic, tool)
-                        }, '*');
-                    }
-                    
-                    // Activer le bouton Save si des formes sont présentes
-                    activateSaveButtonIfShapesExist();
-                }
-                
-                // Fonction pour gérer la sélection de formes
-                function handleShapeSelection() {
-                    const selectedGraphics = sketchWidget.view.graphics.filter(g => g.selected);
-                    console.log('🎯 Formes sélectionnées:', selectedGraphics.length);
-                    
-                    if (selectedGraphics.length > 0) {
-                        // Notifier le LWC qu'une forme est sélectionnée
-                        if (window.parent) {
-                            window.parent.postMessage({
-                                type: 'SHAPE_SELECTED',
-                                shape: extractShapeInfo(selectedGraphics[0])
-                            }, '*');
-                        }
-                    } else {
-                        // Notifier le LWC qu'aucune forme n'est sélectionnée
-                        if (window.parent) {
-                            window.parent.postMessage({
-                                type: 'NO_SHAPE_SELECTED'
-                            }, '*');
-                        }
-                    }
-                }
-                
-                // Fonction pour gérer la suppression de formes
-                function handleShapeDeletion() {
-                    const remainingGraphics = sketchWidget.view.graphics.length;
-                    console.log('🗑️ Formes restantes:', remainingGraphics);
-                    
-                    if (remainingGraphics === 0) {
-                        // Notifier le LWC qu'aucune forme n'est disponible
-                        if (window.parent) {
-                            window.parent.postMessage({
-                                type: 'NO_SHAPE_SELECTED'
-                            }, '*');
-                        }
-                    } else {
-                        // Activer le bouton Save si des formes restent
-                        activateSaveButtonIfShapesExist();
-                    }
-                }
-                
-                // Fonction pour activer le bouton Save si des formes existent
-                function activateSaveButtonIfShapesExist() {
-                    if (sketchWidget && sketchWidget.view) {
-                        const graphics = sketchWidget.view.graphics.filter(g => g.geometry);
-                        if (graphics.length > 0) {
-                            console.log('✅ Formes présentes sur la carte, activation du bouton Save');
-                            if (window.parent) {
-                                window.parent.postMessage({
-                                    type: 'SHAPE_SELECTED',
-                                    shape: extractShapeInfo(graphics[0])
-                                }, '*');
-                            }
-                        }
-                    }
-                }
-                
-
-                
-                // Fonction pour extraire les informations d'une forme
-                function extractShapeInfo(graphic, tool) {
-                    if (!graphic) {
-                        console.error('❌ Graphic est null ou undefined');
-                        throw new Error('Graphic invalide');
-                    }
-                    
-                    if (!graphic.geometry) {
-                        console.error('❌ Geometry est null ou undefined dans le graphic:', graphic);
-                        throw new Error('Géométrie invalide');
-                    }
-                    
-                    const geometry = graphic.geometry;
-                    console.log('🔍 Géométrie à extraire:', geometry);
-                    
-                    let shapeInfo = {
-                        type: 'unknown',
-                        coordinates: [],
-                        center: null,
-                        isCircle: false, // Flag pour préserver le type métier Circle
-                        address: null // Adresse obtenue par géocodage
-                    };
-                    
-                    // Récupérer l'adresse si disponible
-                    if (graphic.attributes && graphic.attributes.address) {
-                        const address = graphic.attributes.address;
-                        if (address && address !== "Géocodage en cours..." && 
-                            address !== "Adresse non trouvée" && 
-                            address !== "Erreur de géocodage") {
-                            shapeInfo.address = address;
-                        }
-                    }
-                    
-                    // Convertir la géométrie en WGS84 si nécessaire
-                    const wgs84Geometry = convertToWGS84(geometry);
-                    
-                    if (wgs84Geometry.type === 'point') {
-                        shapeInfo.type = 'Point';
-                        shapeInfo.coordinates = [{
-                            latitude: wgs84Geometry.latitude,
-                            longitude: wgs84Geometry.longitude
-                        }];
-                        shapeInfo.center = {
-                            latitude: wgs84Geometry.latitude,
-                            longitude: wgs84Geometry.longitude
-                        };
-                    } else if (wgs84Geometry.type === 'polyline') {
-                        shapeInfo.type = 'Polyline';
-                        shapeInfo.coordinates = wgs84Geometry.paths[0].map(coord => ({
-                            latitude: coord[1],
-                            longitude: coord[0]
-                        }));
-                        shapeInfo.center = wgs84Geometry.extent.center;
-                    } else if (wgs84Geometry.type === 'polygon') {
-                        // Vérifier si c'est un cercle (créé avec l'outil circle)
-                        const isCircle = isPolygonACircle(wgs84Geometry);
-                        shapeInfo.type = isCircle ? 'Circle' : 'Polygon';
-                        shapeInfo.isCircle = isCircle;
-                        
-                        shapeInfo.coordinates = wgs84Geometry.rings[0].map(coord => ({
-                            latitude: coord[1],
-                            longitude: coord[0]
-                        }));
-                        shapeInfo.center = wgs84Geometry.extent.center;
-                    } else if (wgs84Geometry.type === 'extent') {
-                        // Rectangle ou cercle
-                        if (wgs84Geometry.width === wgs84Geometry.height) {
-                            shapeInfo.type = 'Circle';
-                            shapeInfo.isCircle = true;
-                        } else {
-                            shapeInfo.type = 'Rectangle';
-                        }
-                        const xmin = wgs84Geometry.xmin;
-                        const ymin = wgs84Geometry.ymin;
-                        const xmax = wgs84Geometry.xmax;
-                        const ymax = wgs84Geometry.ymax;
-                        shapeInfo.coordinates = [
-                            { latitude: ymin, longitude: xmin },
-                            { latitude: ymin, longitude: xmax },
-                            { latitude: ymax, longitude: xmax },
-                            { latitude: ymax, longitude: xmin },
-                            { latitude: ymin, longitude: xmin }
-                        ];
-                        shapeInfo.center = wgs84Geometry.center;
-                    }
-                    
-                    // Si l'outil est connu, forcer le type attendu plateforme
-                    if (tool) {
-                        const toolMap = { point: 'Point', polyline: 'Polyline', polygon: 'Polygon', rectangle: 'Rectangle', circle: 'Circle' };
-                        const mapped = toolMap[tool];
-                        if (mapped) {
-                            shapeInfo.type = mapped;
-                            if (mapped === 'Circle') {
-                                shapeInfo.isCircle = true;
-                            }
-                        }
-                    }
-                    
-                    return shapeInfo;
-                }
-                
-                // Fonction pour convertir une géométrie en WGS84
-                function convertToWGS84(geometry) {
-                    // Vérifier si la géométrie est déjà en WGS84
-                    if (geometry.spatialReference && geometry.spatialReference.wkid === 4326) {
-                        return geometry;
-                    }
-                    
+                // Initialiser les widgets
+                async function initializeWidgets() {
                     try {
-                        // Gérer le cas WebMercator standard (102100/3857)
-                        const wkid = geometry.spatialReference && geometry.spatialReference.wkid;
-                        if (wkid === 102100 || wkid === 3857) {
-                            const converted = webMercatorUtils.webMercatorToGeographic(geometry);
-                            if (converted) {
-                                return converted;
-                            }
-                        }
-                        
-                        // Si non convertible, retourner tel quel
-                        console.warn('⚠️ Conversion WGS84 non appliquée, WKID:', wkid);
-                        return geometry;
-                    } catch (e) {
-                        console.error('❌ Erreur conversion WGS84:', e);
-                        return geometry; // Fallback sans conversion
-                    }
-                }
-                
-                // Fonction pour détecter si un polygone est un cercle
-                function isPolygonACircle(geometry) {
-                    if (geometry.type !== 'polygon' || !geometry.rings || geometry.rings.length === 0) {
-                        return false;
-                    }
-                    
-                    const ring = geometry.rings[0];
-                    if (ring.length < 4) return false;
-                    
-                    // Vérifier si c'est approximativement circulaire
-                    // Un cercle a des angles réguliers et une forme relativement symétrique
-                    const center = geometry.extent.center;
-                    const distances = ring.map(coord => {
-                        const dx = coord[0] - center.longitude;
-                        const dy = coord[1] - center.latitude;
-                        return Math.sqrt(dx * dx + dy * dy);
-                    });
-                    
-                    // Calculer la variance des distances (plus elle est faible, plus c'est circulaire)
-                    const avgDistance = distances.reduce((sum, d) => sum + d, 0) / distances.length;
-                    const variance = distances.reduce((sum, d) => sum + Math.pow(d - avgDistance, 2), 0) / distances.length;
-                    const coefficientOfVariation = Math.sqrt(variance) / avgDistance;
-                    
-                    // Si le coefficient de variation est faible, c'est probablement un cercle
-                    return coefficientOfVariation < 0.1; // Seuil ajustable
-                }
-                
-                // Fonction pour s'assurer que les coordonnées sont en WGS84
-                function ensureWGS84Coordinates(shapeInfo) {
-                    // Vérifier si les coordonnées sont dans les bornes WGS84
-                    const isValidWGS84 = (lat, lon) => lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180;
-                    
-                    // Vérifier le centre
-                    if (shapeInfo.center && !isValidWGS84(shapeInfo.center.latitude, shapeInfo.center.longitude)) {
-                        console.warn('⚠️ Coordonnées du centre hors bornes WGS84:', shapeInfo.center);
-                    }
-                    
-                    // Vérifier toutes les coordonnées
-                    if (shapeInfo.coordinates) {
-                        shapeInfo.coordinates.forEach((coord, index) => {
-                            if (!isValidWGS84(coord.latitude, coord.longitude)) {
-                                console.warn(`⚠️ Coordonnée ${index} hors bornes WGS84:`, coord);
-                            }
+                        // Widget de recherche
+                        const searchWidget = new Search({
+                            view: view,
+                            includeDefaultSources: false,
+                            sources: [{
+                                url: "https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer",
+                                singleLineFieldName: "SingleLine",
+                                name: "ArcGIS World Geocoding Service",
+                                placeholder: "Rechercher une adresse...",
+                                maxResults: 3,
+                                maxSuggestions: 6,
+                                minSuggestCharacters: 3
+                            }]
                         });
-                    }
-                    
-                    return shapeInfo;
-                }
+                        view.ui.add(searchWidget, "top-left");
 
-                // Gestion simple des erreurs de géolocalisation
-                locateWidget.on("locate-error", function(event) {
-                    console.warn('⚠️ Erreur de géolocalisation:', event.error);
-                    
-                    if (event.error.code === 1) {
-                        // Permission refusée
-                        console.warn('❌ Permission de géolocalisation refusée par l\'utilisateur');
-                    } else if (event.error.code === 2) {
-                        // Position indisponible
-                        console.warn('❌ Position indisponible');
-                    } else if (event.error.code === 3) {
-                        // Timeout
-                        console.warn('⏰ Timeout de géolocalisation');
-                    }
-                });
-
-                // Gérer le succès de géolocalisation
-                locateWidget.on("locate", function(event) {
-                    console.log('✅ Géolocalisation réussie:', event);
-                });
-
-                // Ajouter les widgets SEULEMENT si mode édition (pas lecture seule)
-                if (!window.isReadOnlyMode) {
-                    // Ajouter le widget Locate à la vue
-                    view.ui.add(locateWidget, "bottom-left");
-
-                    // Ajouter les widgets à la vue selon les conventions ArcGIS
-                    // Search reste en haut à gauche
-                    view.ui.add(searchWidget, { position: "top-left", index: 0 });
-                    // Déplacer Zoom et Locate en bas à gauche (Zoom au-dessus)
-                    try { view.ui.move("zoom", { position: "bottom-left", index: 0 }); } catch (e) { try { view.ui.move("zoom", "bottom-left"); } catch (ignore) {} }
-                    view.ui.add(locateWidget, { position: "bottom-left", index: 1 });
-                    view.ui.add(compassWidget, "top-right");   // Compass (navigation)
-                    view.ui.add(basemapToggleWidget, "top-right"); // BasemapToggle (changement de fond)
-                    view.ui.add(sketchWidget, "bottom-right"); // Sketch (outils de dessin)
-                } else {
-                    // En lecture seule, s'assurer que le contrôleur Zoom est visible en bas à droite
-                    try { view.ui.move("zoom", "bottom-right"); } catch (e) {}
-                }
-                // Zoom reste en "bottom-right" par défaut (coexiste avec Sketch)
-
-                console.log('🎯 Widgets ajoutés selon conventions ArcGIS:');
-                console.log('  - Search: top-left (recherche)');
-                console.log('  - Compass: top-right (navigation)');
-                console.log('  - BasemapToggle: top-right (changement de fond)');
-                console.log('  - Locate: bottom-left (géolocalisation)');
-                console.log('  - Sketch: bottom-right (outils de dessin)');
-                console.log('  - Zoom: bottom-right (par défaut, coexiste avec Sketch)');
-                console.log('');
-                console.log('🧭 ROTATION ACTIVÉE:');
-                console.log('  - PC: Shift + glisser pour tourner la carte');
-                console.log('  - Mobile: Rotation avec deux doigts');
-                console.log('  - Compass: Clic pour remettre au nord');
-
-                // Écouter la sélection d'une suggestion de recherche
-                searchWidget.on("select-result", function(event) {
-                    console.log('🔍 Suggestion sélectionnée:', event);
-                    
-                    if (event.result) {
-                        const result = event.result;
-                        const location = result.extent || result.feature.geometry;
-                        
-                        if (location) {
-                            // Centrer la carte sur le résultat
-                            if (location.extent) {
-                                view.goTo(location.extent, { duration: 1000 });
-                            } else {
-                                view.goTo(location, { duration: 1000 });
-                            }
-                            
-                            // Créer un marqueur sur l'emplacement trouvé
-                            const point = location.extent ? location.extent.center : location;
-                            const symbol = new SimpleMarkerSymbol({
-                                color: [0, 122, 194], // Bleu ArcGIS
-                                outline: {
-                                    color: [255, 255, 255],
-                                    width: 2
-                                },
-                                size: 12
-                            });
-                            
-                            const graphic = new Graphic({
-                                geometry: point,
-                                symbol: symbol,
-                                attributes: {
-                                    latitude: point.latitude ? point.latitude.toFixed(6) : "N/A",
-                                    longitude: point.longitude ? point.longitude.toFixed(6) : "N/A",
-                                    address: result.name || "Adresse trouvée"
-                                },
-                                popupTemplate: popupTemplate
-                            });
-                            
-                            // Nettoyer les anciens marqueurs et ajouter le nouveau
-                            view.graphics.removeAll();
-                            view.graphics.add(graphic);
-                            
-                            // Ouvrir immédiatement le popup avec "Géocodage en cours..."
-                            view.openPopup({
-                                title: "📍 Adresse",
-                                content: `
-                                    <div style="padding: 15px; text-align: center;">
-                                        <div style="margin-bottom: 15px;">
-                                            <img src="https://js.arcgis.com/4.33/esri/themes/base/images/Loading_Indicator.gif" alt="Loading..." width="20" height="20" />
-                                        </div>
-                                        <p style="font-size: 14px; color: #666; margin: 0;">
-                                            Géocodage en cours...
-                                        </p>
-                                    </div>
-                                `,
-                                location: point
-                            });
-                            
-                            // Faire le géocodage en arrière-plan comme pour les clics manuels
-                            performGeocoding(point.latitude, point.longitude, graphic);
-                            
-                            console.log('✅ Carte centrée sur:', result.name, 'géocodage en cours...');
-                        }
-                    }
-                });
-                
-                // Créer le PopupTemplate pour afficher les informations de géocodage
-                const popupTemplate = new PopupTemplate({
-                    title: "📍 Informations de localisation",
-                    content: [
-                        {
-                            type: "fields",
-                            fieldInfos: [
-                                {
-                                    fieldName: "address",
-                                    label: "Adresse",
-                                    visible: true
-                                },
-                                {
-                                    fieldName: "latitude",
-                                    label: "Latitude",
-                                    visible: true
-                                },
-                                {
-                                    fieldName: "longitude",
-                                    label: "Longitude",
-                                    visible: true
-                                }
-                            ]
-                        }
-                    ]
-                });
-                
-                // Configuration des clics sur graphics intégrée dans le handler principal
-                
-                view.when(() => {
-                    console.log('✅ Carte ArcGIS VF initialisée !');
-                    
-                    // Notifier le parent (LWC) que la carte est prête
-                    if (window.parent) {
-                        window.parent.postMessage({
-                            type: 'MAP_READY',
-                            message: 'ArcGIS map initialized successfully'
-                        }, '*');
-                    }
-                });
-                
-                // HANDLER DE CLIC - DÉSACTIVÉ EN LECTURE SEULE
-                view.on("click", function(event) {
-                    if (window.isReadOnlyMode) {
-                        console.log('🔒 Lecture seule - clic ignoré');
-                        return;
-                    }
-                    console.log('🖱️ Clic détecté sur la carte - mode natif ArcGIS');
-                    
-                    // Si un outil de création Sketch est actif, laisser Sketch gérer
-                    if (window.isSketchCreateMode) {
-                        console.log('🎨 Mode création Sketch activé - géocodage suspendu');
-                        return;
-                    }
-                    
-                    // Si le popup auto est désactivé (mode dessin), ne pas géocoder
-                    if (view && view.popup && view.popup.autoOpenEnabled === false) {
-                        console.log('🛑 Popup désactivé pour dessin - clic ignoré');
-                        return;
-                    }
-                    
-                    // Si le widget Sketch existe et qu'un outil de création est sélectionné, ne pas interférer
-                    if (window.sketchWidget) {
-                        const vm = window.sketchWidget.viewModel || {};
-                        const activeTool = window.sketchWidget.activeTool || vm.activeTool;
-                        const state = vm.state;
-                        if (activeTool) {
-                            console.log('🎨 Outil Sketch actif (', activeTool, ') - géocodage suspendu');
-                        return; // Laisser le widget Sketch gérer le clic
-                        }
-                        if (state !== "ready" && state !== "disabled") {
-                            console.log('🎨 Widget Sketch actif (state:', state, ') - géocodage suspendu');
-                            return;
-                        }
-                    }
-                    
-                    console.log('✅ Mode navigation natif - géocodage sur clic activé');
-                    
-                    const coords = {
-                        longitude: event.mapPoint.longitude,
-                        latitude: event.mapPoint.latitude
-                    };
-                    
-                    console.log('📍 Coordonnées:', coords);
-                    
-                    // Envoyer les coordonnées au parent (LWC)
-                    if (window.parent) {
-                        window.parent.postMessage({
-                            type: 'MAP_CLICK',
-                            coordinates: coords
-                        }, '*');
-                        console.log('📨 Message envoyé au parent LWC');
-                    }
-                    
-                    // Créer un point pour le popup
-                    const point = new Point({
-                        longitude: event.mapPoint.longitude,
-                        latitude: event.mapPoint.latitude
-                    });
-                    
-                    // Créer un marqueur temporaire
-                    const symbol = new SimpleMarkerSymbol({
-                        color: [226, 119, 40],
-                        outline: {
-                            color: [255, 255, 255],
-                            width: 2
-                        }
-                    });
-                    
-                    // Créer le graphic avec le popup
-                    const graphic = new Graphic({
-                        geometry: point,
-                        symbol: symbol,
-                        popupTemplate: popupTemplate,
-                        attributes: {
-                            latitude: coords.latitude.toFixed(6),
-                            longitude: coords.longitude.toFixed(6),
-                            address: "Géocodage en cours..."
-                        }
-                    });
-                    
-                    // Nettoyer les anciens marqueurs et ajouter le nouveau
-                    view.graphics.removeAll();
-                    view.graphics.add(graphic);
-                    
-                    // Ouvrir immédiatement le popup avec "Géocodage en cours..."
-                    view.openPopup({
-                        title: "📍 Adresse",
-                        content: `
-                            <div style="padding: 15px; text-align: center;">
-                                <div style="margin-bottom: 15px;">
-                                    <img src="https://js.arcgis.com/4.33/esri/themes/base/images/Loading_Indicator.gif" alt="Loading..." width="20" height="20" />
-                                </div>
-                                <p style="font-size: 14px; color: #666; margin: 0;">
-                                    Géocodage en cours...
-                                </p>
-                            </div>
-                        `,
-                        location: point
-                    });
-                    
-                    // Faire le géocodage en arrière-plan
-                    performGeocoding(coords.latitude, coords.longitude, graphic);
-                    
-                    console.log('✅ Géocodage démarré - popup ouvert');
-                }, { passive: false }); // Événement non-passif pour permettre preventDefault si nécessaire
-                
-                // Fonction de géocodage
-                function performGeocoding(latitude, longitude, graphic) {
-                    console.log('🌍 Début géocodage pour:', latitude, longitude);
-                    
-                    // Appel à l'API ArcGIS Geocoding
-                    const geocodeUrl = `https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/reverseGeocode?location=${longitude},${latitude}&outSR=4326&returnIntersection=false&f=json`;
-                    
-                    fetch(geocodeUrl)
-                        .then(response => response.json())
-                        .then(data => {
-                            console.log('✅ Réponse géocodage:', data);
-                            
-                            if (data.address) {
-                                const address = formatAddress(data.address);
-                                console.log('🏠 Adresse formatée:', address);
-                                
-                                // Mettre à jour le graphic avec l'adresse
-                                graphic.attributes.address = address;
-                                
-                                console.log('✅ Adresse mise à jour dans le graphic');
-                                
-                                // Ouvrir automatiquement le popup avec l'adresse
-                                view.openPopup({
-                                    title: "📍 Adresse",
-                                    content: `
-                                        <div style="padding: 20px; text-align: center;">
-                                            <div style="font-size: 16px; line-height: 1.4; color: #333;">
-                                                ${address}
-                                            </div>
-                                        </div>
-                                    `,
-                                    location: graphic.geometry
-                                });
-                                
-                                console.log('🎯 Popup ouvert automatiquement avec l\'adresse');
-                                
-                                // NOTIFIER LE LWC QU'UNE ADRESSE EST SÉLECTIONNÉE (comme une forme dessinée)
-                                if (window.parent) {
-                                    window.parent.postMessage({
-                                        type: 'ADDRESS_SELECTED',
-                                        address: {
-                                            type: 'Adresse',
-                                            coordinates: [{
-                                                latitude: parseFloat(graphic.attributes.latitude),
-                                                longitude: parseFloat(graphic.attributes.longitude)
-                                            }],
-                                            center: {
-                                                latitude: parseFloat(graphic.attributes.latitude),
-                                                longitude: parseFloat(graphic.attributes.longitude)
-                                            },
-                                            address: address,
-                                            isAddress: true // Flag pour identifier les adresses
-                                        }
-                                    }, '*');
-                                    
-                                    console.log('📨 Message ADDRESS_SELECTED envoyé au parent LWC avec adresse:', address);
-                                    
-                                    // ENVOYER AUSSI SHAPE_SELECTED pour activer le bouton Save
-                                    window.parent.postMessage({
-                                        type: 'SHAPE_SELECTED',
-                                        shape: {
-                                            type: 'Point',
-                                            coordinates: [{
-                                                latitude: parseFloat(graphic.attributes.latitude),
-                                                longitude: parseFloat(graphic.attributes.longitude)
-                                            }],
-                                            center: {
-                                                latitude: parseFloat(graphic.attributes.latitude),
-                                                longitude: parseFloat(graphic.attributes.longitude)
-                                            },
-                                            address: address,
-                                            isAddress: true
-                                        }
-                                    }, '*');
-                                    console.log('📨 Message SHAPE_SELECTED envoyé pour activer le bouton Save');
-                                }
-                            } else {
-                                console.log('⚠️ Aucune adresse trouvée');
-                                graphic.attributes.address = "Adresse non trouvée";
-                                
-                                // NOTIFIER LE LWC QU'UNE ADRESSE EST SÉLECTIONNÉE (même sans adresse)
-                                if (window.parent) {
-                                    window.parent.postMessage({
-                                        type: 'ADDRESS_SELECTED',
-                                        address: {
-                                            type: 'Adresse',
-                                            coordinates: [{
-                                                latitude: parseFloat(graphic.attributes.latitude),
-                                                longitude: parseFloat(graphic.attributes.longitude)
-                                            }],
-                                            center: {
-                                                latitude: parseFloat(graphic.attributes.latitude),
-                                                longitude: parseFloat(graphic.attributes.longitude)
-                                            },
-                                            address: "Adresse non trouvée",
-                                            isAddress: true // Flag pour identifier les adresses
-                                        }
-                                    }, '*');
-                                    
-                                    console.log('📨 Message ADDRESS_SELECTED envoyé au parent LWC (sans adresse)');
-                                    
-                                    // ENVOYER AUSSI SHAPE_SELECTED pour activer le bouton Save
-                                    window.parent.postMessage({
-                                        type: 'SHAPE_SELECTED',
-                                        shape: {
-                                            type: 'Point',
-                                            coordinates: [{
-                                                latitude: parseFloat(graphic.attributes.latitude),
-                                                longitude: parseFloat(graphic.attributes.longitude)
-                                            }],
-                                            center: {
-                                                latitude: parseFloat(graphic.attributes.latitude),
-                                                longitude: parseFloat(graphic.attributes.longitude)
-                                            },
-                                            address: "Adresse non trouvée",
-                                            isAddress: true
-                                        }
-                                    }, '*');
-                                    console.log('📨 Message SHAPE_SELECTED envoyé pour activer le bouton Save (sans adresse)');
-                                }
-                                
-                                // Ouvrir popup avec message d'erreur
-                                view.openPopup({
-                                    title: "📍 Adresse",
-                                    content: `
-                                        <div style="padding: 20px; text-align: center;">
-                                            <div style="font-size: 16px; color: #d73a49; margin-bottom: 10px;">
-                                                ⚠️ Adresse non trouvée
-                                            </div>
-                                            <div style="font-size: 14px; color: #666;">
-                                                Impossible de récupérer l'adresse pour ces coordonnées
-                                            </div>
-                                        </div>
-                                    `,
-                                    location: graphic.geometry
-                                });
-                            }
-                        })
-                        .catch(error => {
-                            console.error('❌ Erreur géocodage:', error);
-                            graphic.attributes.address = "Erreur de géocodage";
-                            
-                            // Ouvrir popup avec message d'erreur
-                            view.openPopup({
-                                title: "📍 Adresse",
-                                content: `
-                                    <div style="padding: 20px; text-align: center;">
-                                        <div style="font-size: 16px; color: #d73a49; margin-bottom: 10px;">
-                                            ❌ Erreur de géocodage
-                                        </div>
-                                        <div style="font-size: 14px; color: #666;">
-                                            Impossible de récupérer l'adresse
-                                        </div>
-                                    </div>
-                                `,
-                                location: graphic.geometry
-                            });
+                        // Widget boussole
+                        const compassWidget = new Compass({
+                            view: view
                         });
-                }
-                
-                // Fonction de formatage d'adresse
-                function formatAddress(addressData) {
-                    const parts = [];
-                    
-                    if (addressData.Address) parts.push(addressData.Address);
-                    if (addressData.City) parts.push(addressData.City);
-                    if (addressData.Region) parts.push(addressData.Region);
-                    if (addressData.Postal) parts.push(addressData.Postal);
-                    if (addressData.CountryCode) parts.push(addressData.CountryCode);
-                    
-                    return parts.length > 0 ? parts.join(', ') : 'Adresse non disponible';
-                }
-                
-                // Fonction pour sauvegarder une forme
-                function handleSaveShape(data) {
-                    console.log('💾 Début de la sauvegarde de forme');
-                    
-                    try {
-                        // Récupérer toutes les formes disponibles (sketch + géocodage)
-                        let graphics = [];
-                        
-                        // 1. Vérifier les graphiques du sketch widget
-                        if (sketchWidget && sketchWidget.view && sketchWidget.view.graphics) {
-                            const sketchGraphics = sketchWidget.view.graphics.filter(g => g.geometry);
-                            graphics = graphics.concat(sketchGraphics.toArray());
-                            console.log('📊 Graphiques sketch trouvés:', sketchGraphics.length);
-                        }
-                        
-                        // 2. Vérifier les graphiques de la vue principale (géocodage)
-                        if (view && view.graphics) {
-                            const viewGraphics = view.graphics.filter(g => g.geometry);
-                            graphics = graphics.concat(viewGraphics.toArray());
-                            console.log('📊 Graphiques view trouvés:', viewGraphics.length);
-                        }
-                        
-                        // 3. Vérifier le sketch layer
-                        if (sketchLayer && sketchLayer.graphics) {
-                            const layerGraphics = sketchLayer.graphics.filter(g => g.geometry);
-                            graphics = graphics.concat(layerGraphics.toArray());
-                            console.log('📊 Graphiques layer trouvés:', layerGraphics.length);
-                        }
-                        
-                        console.log('📊 Total graphiques trouvés:', graphics.length);
-                        
-                        if (graphics.length === 0) {
-                            console.warn('⚠️ Aucune forme à sauvegarder');
-                            notifyParent('SAVE_ERROR', { error: 'Aucune forme à sauvegarder' });
-                            return;
-                        }
-                        
-                        // Prendre la dernière forme créée
-                        const graphic = graphics[graphics.length - 1];
-                        console.log('🎯 Graphic sélectionné pour sauvegarde:', graphic);
-                        
-                        if (!graphic || !graphic.geometry) {
-                            console.error('❌ Graphic invalide ou sans géométrie');
-                            notifyParent('SAVE_ERROR', { error: 'Forme invalide' });
-                            return;
-                        }
-                        
-                        const shapeInfo = extractShapeInfo(graphic);
-                        
-                        console.log('📊 Informations de la forme à sauvegarder:', shapeInfo);
-                        
-                        // Préparer les données pour l'Apex
-                        const mapAreaData = {
-                            Area_Type__c: shapeInfo.type,
-                            Geometry_JSON__c: JSON.stringify(convertToGeoJSON(shapeInfo)),
-                            Latitude__c: shapeInfo.center ? shapeInfo.center.latitude : null,
-                            Longitude__c: shapeInfo.center ? shapeInfo.center.longitude : null,
-                            Address__c: shapeInfo.address || null
-                        };
-                        
-                        console.log('📤 Données à envoyer à Apex:', mapAreaData);
-                        
-                        // Appeler l'Apex via Remoting
-                        saveMapAreaRemote(mapAreaData, data.champRelation, data.idParent);
+                        view.ui.add(compassWidget, "top-left");
+
+                        // Widget de localisation
+                        const locateWidget = new Locate({
+                            view: view,
+                            useHeadingEnabled: false
+                        });
+                        view.ui.add(locateWidget, "top-left");
+
+                        // Widget de basculement de fond de carte
+                        const basemapToggle = new BasemapToggle({
+                            view: view,
+                            nextBasemap: "satellite"
+                        });
+                        view.ui.add(basemapToggle, "bottom-right");
+
+                        console.log('✅ Widgets initialisés');
                         
                     } catch (error) {
-                        console.error('❌ Erreur lors de la préparation de sauvegarde:', error);
-                        notifyParent('SAVE_ERROR', { error: error.message });
+                        console.error('❌ Erreur initialisation widgets:', error);
                     }
                 }
-                
-                // Fonction pour effacer la forme courante
-                function clearCurrentShape() {
-                    if (sketchWidget) {
-                        sketchWidget.cancel();
-                        const graphics = sketchWidget.view.graphics.filter(g => g.geometry);
-                        if (graphics.length > 0) {
-                            sketchWidget.view.graphics.remove(graphics[graphics.length - 1]);
-                        }
-                        notifyParent('NO_SHAPE_SELECTED');
-                    }
-                }
-                
-                // Fonction pour effacer toutes les formes
-                function clearAllShapes() {
-                    if (sketchWidget) {
-                        sketchWidget.cancel();
-                        // Nettoyer les graphiques de la vue principale
-                        if (view && view.graphics) {
-                            view.graphics.removeAll();
-                        }
-                        // Nettoyer le layer de sketch (mais pas savedLayer)
-                        sketchLayer.removeAll();
-                        // Fermer tout popup ouvert
-                        if (view && view.popup) {
-                            if (typeof view.popup.close === 'function') { view.popup.close(); } else { view.popup.visible = false; }
-                        }
-                        
-                        notifyParent('NO_SHAPE_SELECTED');
-                    }
-                }
-                
-                // generateMapAreaName n'est plus utilisé (Name standard auto)
-                
-                // Fonction pour convertir en GeoJSON
-                function convertToGeoJSON(shapeInfo) {
-                    if (shapeInfo.type === 'Point') {
-                        return {
-                            type: "Feature",
-                            geometry: {
-                                type: 'Point',
-                                coordinates: [shapeInfo.coordinates[0].longitude, shapeInfo.coordinates[0].latitude]
-                            },
-                            properties: {
-                                originalType: shapeInfo.type,
-                                address: shapeInfo.address,
-                                isCircle: shapeInfo.isCircle || false
-                            }
-                        };
-                    } else if (shapeInfo.type === 'Polyline') {
-                        return {
-                            type: "Feature",
-                            geometry: {
-                                type: 'LineString',
-                                coordinates: shapeInfo.coordinates.map(c => [c.longitude, c.latitude])
-                            },
-                            properties: {
-                                originalType: shapeInfo.type,
-                                address: shapeInfo.address,
-                                isCircle: false
-                            }
-                        };
-                    } else {
-                        // Polygon / Rectangle (anneau unique)
-                        return {
-                            type: "Feature",
-                            geometry: {
-                                type: 'Polygon',
-                                coordinates: [shapeInfo.coordinates.map(c => [c.longitude, c.latitude])]
-                            },
-                            properties: {
-                                originalType: shapeInfo.type,
-                                address: shapeInfo.address,
-                                isCircle: shapeInfo.isCircle || false
-                            }
-                        };
-                    }
-                }
-                
-                // Fonction pour notifier le parent LWC
-                function notifyParent(type, data = {}) {
-                    if (window.parent) {
-                        window.parent.postMessage({ type, data }, '*');
-                    }
-                }
-                
-                // Fonction Apex Remoting pour sauvegarder
-                function saveMapAreaRemote(mapAreaData, champRelation, idParent) {
-                    console.log('🚀 Préparation des données de sauvegarde (renvoi au LWC)');
 
+                // Charger la configuration des outils de dessin
+                async function loadDrawingToolsConfig() {
                     try {
-                        // Construire le payload ShapeData attendu par l'Apex LWC
-                        const shapeData = {
-                            areaType: mapAreaData.Area_Type__c,
-                            geoJson: mapAreaData.Geometry_JSON__c,
-                            latitude: mapAreaData.Latitude__c,
-                            longitude: mapAreaData.Longitude__c,
-                            address: mapAreaData.Address__c
-                        };
-
-                        console.log('📋 ShapeData renvoyé au LWC:', shapeData);
-
-                        // Notifier le parent (LWC) pour qu'il appelle l'Apex
-                        if (window.parent) {
-                            window.parent.postMessage({
-                                type: 'SHAPE_DATA',
-                                data: { shapeData }
-                            }, '*');
-                        }
-                    } catch (error) {
-                        console.error('❌ Erreur lors de la préparation des données de sauvegarde:', error);
-                        notifyParent('SAVE_ERROR', { error: error.message || 'Erreur de préparation des données' });
-                    }
-                }
-                
-                // Écouter les messages du parent (LWC)
-                window.addEventListener('message', function(event) {
-                    console.log('📨 Message reçu du LWC:', event.data);
-                    
-                    if (event.data.type === 'CENTER_MAP') {
-                        view.center = [event.data.longitude, event.data.latitude];
-                        if (event.data.zoom) {
-                            view.zoom = event.data.zoom;
-                        }
-                    } else if (event.data.type === 'DISPLAY_SAVED_SHAPE') {
-                        displaySavedShape(event.data);
-                    } else if (event.data.type === 'SAVE_SHAPE') {
-                        console.log('💾 Demande de sauvegarde reçue');
-                        handleSaveShape(event.data.data);
-                    } else if (event.data.type === 'CLEAR_SHAPE') {
-                        console.log('🧹 Demande d\'effacement de forme');
-                        clearCurrentShape();
-                    } else if (event.data.type === 'CLEAR_ALL') {
-                        console.log('🧹 Demande d\'effacement total');
-                        clearAllShapes();
-                    } else if (event.data.type === 'GEOCODE_REQUEST') {
-                        console.log('🌍 Demande de géocodage reçue:', event.data.coordinates);
-                        
-                        // Créer un point pour le popup
-                        const point = new Point({
-                            longitude: event.data.coordinates.longitude,
-                            latitude: event.data.coordinates.latitude
-                        });
-                        
-                        // Créer le graphic avec le popup
-                        const graphic = new Graphic({
-                            geometry: point,
-                            symbol: new SimpleMarkerSymbol({
-                                color: [226, 119, 40],
-                                outline: { color: [255, 255, 255], width: 2 }
-                            }),
-                            popupTemplate: popupTemplate,
-                            attributes: {
-                                latitude: event.data.coordinates.latitude.toFixed(6),
-                                longitude: event.data.coordinates.longitude.toFixed(6),
-                                address: "Géocodage en cours..."
-                            }
-                        });
-                        
-                        // Nettoyer et ajouter le nouveau marqueur
-                        view.graphics.removeAll();
-                        view.graphics.add(graphic);
-                        
-                        // Ouvrir immédiatement le popup avec "Géocodage en cours..."
-                        view.openPopup({
-                            title: "📍 Adresse",
-                            content: `
-                                <div style="padding: 15px; text-align: center;">
-                                    <div style="margin-bottom: 15px;">
-                                        <img src="https://js.arcgis.com/4.33/esri/themes/base/images/Loading_Indicator.gif" alt="Loading..." width="20" height="20" />
-                                    </div>
-                                    <p style="font-size: 20px; color: #666; margin: 0;">
-                                        Géocodage en cours...
-                                    </p>
-                                </div>
-                            `,
-                            location: point
-                        });
-                        
-                        // Faire le géocodage
-                        performGeocoding(event.data.coordinates.latitude, event.data.coordinates.longitude, graphic);
-                        
-                        console.log('✅ Popup ouvert depuis LWC, géocodage en cours');
-                    } else if (event.data.type === 'GET_CURRENT_SHAPE') {
-                        console.log('🎯 Demande de forme actuelle reçue');
-                        
-                        // Récupérer toutes les formes du sketchLayer
-                        const allGraphics = sketchLayer.graphics.toArray();
-                        console.log('🎨 Formes disponibles:', allGraphics.length);
-                        
-                        if (allGraphics.length > 0) {
-                            // Extraire les informations de toutes les formes
-                            const shapes = allGraphics.map(graphic => extractShapeInfo(graphic));
-                            
-                            // Envoyer la réponse au LWC
-                            if (window.parent) {
-                                window.parent.postMessage({
-                                    type: 'CURRENT_SHAPES_RESPONSE',
-                                    shapes: shapes,
-                                    totalCount: shapes.length
-                                }, '*');
-                            }
-                            
-                            console.log('📨 Réponse envoyée au LWC:', shapes);
-                        } else {
-                            // Aucune forme disponible
-                            if (window.parent) {
-                                window.parent.postMessage({
-                                    type: 'CURRENT_SHAPES_RESPONSE',
-                                    shapes: [],
-                                    totalCount: 0
-                                }, '*');
-                            }
-                            
-                            console.log('📨 Réponse envoyée au LWC: Aucune forme');
-                        }
-                    } else if (event.data.type === 'CLEAR_SELECTION') {
-                        console.log('🗑️ Demande de désélection reçue');
-                        
-                        // Désélectionner toutes les formes
-                        if (sketchWidget && sketchWidget.view) {
-                            sketchWidget.view.graphics.forEach(graphic => {
-                                graphic.selected = false;
-                            });
-                        }
-                        
-                        // Notifier le LWC que la sélection est vide
-                        if (window.parent) {
-                            window.parent.postMessage({
-                                type: 'NO_SHAPE_SELECTED'
-                            }, '*');
-                        }
-                        
-                        console.log('✅ Sélection de la carte vidée');
-                    } else if (event.data.type === 'ACTIVATE_DRAWING_MODE') {
-                        console.log('🎨 Activation du mode dessin demandée');
+                        console.log('🔧 Chargement configuration outils de dessin...');
                         
                         // Créer et activer le widget Sketch
-                        createAndActivateSketchWidget();
+                        sketchWidget = new Sketch({
+                            view: view,
+                            layer: sketchLayer,
+                            creationMode: "hybrid"
+                        });
                         
-                    } else if (event.data.type === 'DEACTIVATE_DRAWING_MODE') {
-                        console.log('🖱️ Désactivation du mode dessin - retour natif ArcGIS');
+                        view.ui.add(sketchWidget, "top-right");
+                        console.log('✅ Widget Sketch initialisé');
                         
-                        // Désactiver le widget Sketch et revenir au mode natif
-                        deactivateSketchWidget();
-                        
-                    } else if (event.data.type === 'SET_DRAWING_MODE') {
-                        console.log('🔧 Changement de mode de dessin:', event.data.tool);
-                        
-                        // S'assurer que le widget existe
-                        if (!window.sketchWidget) {
-                            createAndActivateSketchWidget();
-                        }
-                        
-                        // Activer l'outil spécifique
-                        if (window.sketchWidget) {
-                            setDrawingMode(event.data.tool);
-                        }
-                        
-                    } else if (event.data.type === 'UNDO_LAST_SHAPE') {
-                        console.log('↶ Annulation de la dernière forme');
-                        undoLastShape();
-                    }
-                });
-                
-                // Fonction pour changer le mode de dessin
-                function setDrawingMode(tool) {
-                    if (!window.sketchWidget) {
-                        console.warn('⚠️ SketchWidget pas encore initialisé');
-                        return;
-                    }
-                    
-                    try {
-                        // Désactiver d'abord tous les outils
-                        window.sketchWidget.cancel();
-                        
-                        if (tool === 'select') {
-                            // Mode sélection - pas d'outil actif
-                            console.log('✋ Mode sélection activé');
-                        } else {
-                            // Activer l'outil demandé
-                            const toolMapping = {
-                                'point': 'point',
-                                'polyline': 'polyline', 
-                                'polygon': 'polygon',
-                                'rectangle': 'rectangle',
-                                'circle': 'circle'
-                            };
-                            
-                            const sketchTool = toolMapping[tool];
-                            if (sketchTool) {
-                                // VÉRIFIER QUE L'OUTIL EST AUTORISÉ DANS LA CONFIGURATION
-                                if (window.sketchConfig && window.sketchConfig[sketchTool + 'Tool']) {
-                                    window.sketchWidget.create(sketchTool);
-                                    console.log('🎨 Outil activé:', sketchTool);
-                                } else {
-                                    console.warn('⚠️ Outil non autorisé dans la configuration:', sketchTool);
-                                    // Revenir au mode sélection
-                                    window.sketchWidget.cancel();
-                                }
-                            } else {
-                                console.warn('⚠️ Outil non reconnu:', tool);
+                        // Écouter les événements de dessin
+                        sketchWidget.on("create", function(event) {
+                            if (event.state === "complete") {
+                                console.log('✅ Forme dessinée:', event.graphic);
+                                currentDrawingGraphic = event.graphic;
+                                notifyDrawingComplete(event.graphic);
                             }
-                        }
-                        
-                        // Mettre à jour le compteur
-                        updateShapeCount();
-                        
-                    } catch (error) {
-                        console.error('❌ Erreur lors du changement d\'outil:', error);
-                    }
-                }
-                
-                // Fonction pour mettre à jour dynamiquement la configuration des outils
-                function updateDrawingToolsConfig() {
-                    console.log('🔄 Mise à jour dynamique de la configuration des outils...');
-                    
-                    // Recharger la configuration depuis Custom Settings
-                    loadDrawingToolsConfig().then(newConfig => {
-                        console.log('✅ Nouvelle configuration chargée:', newConfig);
-                        
-                        // Mettre à jour la configuration globale
-                        window.sketchConfig = newConfig;
-                        
-                        // Mettre à jour le widget Sketch si il existe
-                        if (window.sketchWidget) {
-                            console.log('🔧 Mise à jour du widget Sketch avec la nouvelle configuration');
-                            
-                            // Recréer le widget avec la nouvelle configuration
-                            deactivateSketchWidget();
-                            createAndActivateSketchWidget();
-                        }
-                        
-                    }).catch(error => {
-                        console.error('❌ Erreur lors de la mise à jour de la configuration:', error);
-                    });
-                }
-                
-                // Fonction pour annuler la dernière forme
-                function undoLastShape() {
-                    if (!sketchLayer) {
-                        console.warn('⚠️ SketchLayer pas encore initialisé');
-                        return;
-                    }
-                    
-                    try {
-                        const graphics = sketchLayer.graphics;
-                        if (graphics.length > 0) {
-                            // Supprimer la dernière forme ajoutée
-                            const lastGraphic = graphics.getItemAt(graphics.length - 1);
-                            sketchLayer.remove(lastGraphic);
-                            console.log('🗑️ Dernière forme supprimée');
-                            
-                            // Mettre à jour le compteur
-                            updateShapeCount();
-                        } else {
-                            console.log('ℹ️ Aucune forme à annuler');
-                        }
-                    } catch (error) {
-                        console.error('❌ Erreur lors de l\'annulation:', error);
-                    }
-                }
-                
-                // Fonction pour mettre à jour le compteur de formes
-                function updateShapeCount() {
-                    if (!sketchLayer) return;
-                    
-                    const totalCount = sketchLayer.graphics.length;
-                    const selectedCount = sketchLayer.graphics.filter(g => g.selected).length;
-                    
-                    // Envoyer la mise à jour au LWC
-                    if (window.parent) {
-                        window.parent.postMessage({
-                            type: 'SHAPE_COUNT_UPDATE',
-                            totalCount: totalCount,
-                            selectedCount: selectedCount
-                        }, '*');
-                    }
-                    
-                    console.log(`📊 Compteur mis à jour: ${totalCount} formes, ${selectedCount} sélectionnées`);
-                }
-                
-                // Fonction pour configurer les styles de highlight
-                function setupHighlightStyles() {
-                    // Configurer les styles des formes sélectionnées
-                    if (sketchWidget && sketchWidget.viewModel) {
-                        // Style pour les formes sélectionnées
-                        const selectedStyle = {
-                            color: [255, 165, 0, 0.8], // Orange avec transparence
-                            outline: {
-                                color: [255, 100, 0, 1], // Orange foncé pour le contour
-                                width: 3
-                            }
-                        };
-                        
-                        // Style pour les formes non sélectionnées
-                        const normalStyle = {
-                            color: [0, 122, 194, 0.6], // Bleu ArcGIS avec transparence
-                            outline: {
-                                color: [0, 122, 194, 1], // Bleu ArcGIS pour le contour
-                                width: 2
-                            }
-                        };
-                        
-                        console.log('🎨 Styles de highlight configurés');
-                        
-                        // Écouter les changements de sélection pour appliquer les styles
-                        sketchWidget.on("select", function(event) {
-                            applyHighlightStyles();
                         });
                         
                         sketchWidget.on("update", function(event) {
-                            if (event.state === "complete") {
-                                applyHighlightStyles();
+                            console.log('🔄 Forme mise à jour:', event.graphics);
+                        });
+                        
+                        sketchWidget.on("delete", function(event) {
+                            console.log('🗑️ Forme supprimée');
+                            currentDrawingGraphic = null;
+                            notifyDrawingDeleted();
+                        });
+                        
+                    } catch (error) {
+                        console.error('❌ Erreur configuration outils dessin:', error);
+                    }
+                }
+
+                // Configurer la communication postMessage
+                function setupPostMessageCommunication() {
+                    try {
+                        console.log('📡 Configuration communication postMessage...');
+                        
+                        // PROTECTION ANTI-CRASH : Intercepter les touches de zoom Chrome
+                        document.addEventListener('keydown', function(event) {
+                            // Intercepter Cmd+ et Cmd- (zoom Chrome)
+                            if (event.metaKey && (event.key === '+' || event.key === '-' || event.key === '=')) {
+                                console.log('🛡️ Protection anti-crash : Zoom clavier intercepté');
+                                event.preventDefault();
+                                event.stopPropagation();
+                                return false;
+                            }
+                        }, true);
+                        
+                        window.addEventListener('message', function(event) {
+                            console.log('📨 Message reçu:', event.data);
+                            
+                            if (event.data.type === 'GET_MAP_STATE') {
+                                sendMapState();
+                            } else if (event.data.type === 'CLEAR_MAP') {
+                                clearMap();
+                            } else if (event.data.type === 'SET_READONLY_MODE') {
+                                setReadOnlyMode(event.data.readOnly);
                             }
                         });
+                        
+                        console.log('✅ Communication postMessage configurée');
+                        
+                    } catch (error) {
+                        console.error('❌ Erreur configuration postMessage:', error);
                     }
                 }
-                
-                // Fonction pour appliquer les styles de highlight
-                function applyHighlightStyles() {
-                    if (!sketchLayer) return;
-                    
-                    sketchLayer.graphics.forEach(graphic => {
-                        if (graphic.selected) {
-                            // Style pour les formes sélectionnées (orange)
-                            if (graphic.geometry.type === 'point') {
-                                graphic.symbol = {
-                                    type: "simple-marker",
-                                    color: [255, 165, 0, 0.8],
-                                    outline: {
-                                        color: [255, 100, 0, 1],
-                                        width: 3
-                                    },
-                                    size: 12
-                                };
-                            } else {
-                                graphic.symbol = {
-                                    type: graphic.geometry.type === 'polyline' ? "simple-line" : "simple-fill",
-                                    color: [255, 165, 0, 0.3],
-                                    outline: {
-                                        color: [255, 100, 0, 1],
-                                        width: 3
-                                    }
-                                };
-                            }
-                        } else {
-                            // Style pour les formes normales (bleu)
-                            if (graphic.geometry.type === 'point') {
-                                graphic.symbol = {
-                                    type: "simple-marker",
-                                    color: [0, 122, 194, 0.8],
-                                    outline: {
-                                        color: [0, 122, 194, 1],
-                                        width: 2
-                                    },
-                                    size: 10
-                                };
-                            } else {
-                                graphic.symbol = {
-                                    type: graphic.geometry.type === 'polyline' ? "simple-line" : "simple-fill",
-                                    color: [0, 122, 194, 0.2],
-                                    outline: {
-                                        color: [0, 122, 194, 1],
-                                        width: 2
-                                    }
-                                };
-                            }
-                        }
-                    });
-                    
-                    console.log('🎨 Styles de highlight appliqués');
-                }
 
-                // Afficher une forme sauvegardée dans le layer dédié et la mettre en évidence
-                function displaySavedShape(data) {
+                // Effacer la carte
+                function clearMap() {
                     try {
-                        const geometryData = data.geometryData; // GeoJSON string
-                        const feature = typeof geometryData === 'string' ? JSON.parse(geometryData) : geometryData;
-                        const areaType = data.areaType;
+                        sketchLayer.removeAll();
+                        currentDrawingGraphic = null;
+                        console.log('🗑️ Carte effacée');
                         
-                        // Créer le graphic selon type
-                        let graphic = null;
-                        switch (areaType) {
-                            case 'Point':
-                                graphic = createReadOnlyPointGraphic(feature);
-                                break;
-                            case 'Polyline':
-                                graphic = createReadOnlyPolylineGraphic(feature);
-                                break;
-                            case 'Polygon':
-                            case 'Rectangle':
-                            case 'Circle':
-                                graphic = createReadOnlyPolygonGraphic(feature);
-                                break;
-                        }
-                        if (!graphic) return;
+                        // Notifier la suppression
+                        notifyDrawingDeleted();
                         
-                        // Option: style de mise en évidence
-                        if (graphic.symbol && graphic.symbol.outline) {
-                            graphic.symbol.outline.width = 3;
-                        }
-                        
-                        // Ajouter/mettre en avant
-                        savedLayer.add(graphic);
-                        
-                        // Centrer la vue
-                        if (data.autoCenter) {
-                            const extent = graphic.geometry.extent || graphic.geometry;
-                            view.goTo({ target: extent, zoom: extent.type === 'point' ? 16 : undefined });
-                        }
-                    } catch (e) {
-                        console.error('❌ Erreur displaySavedShape:', e);
+                    } catch (error) {
+                        console.error('❌ Erreur effacement carte:', error);
                     }
                 }
-            });
-            
 
-            
-            // Fonction pour afficher une géométrie en mode lecture seule
-            function displayReadOnlyGeometry(data) {
-                console.log('📍 Affichage géométrie en mode lecture seule:', data);
-                
-                try {
-                    const geometryData = data.geometryData;
-                    const feature = JSON.parse(geometryData);
-                    
-                    // Effacer les graphiques existants
-                    sketchLayer.removeAll();
-                    
-                    let graphic = null;
-                    
-                    // Créer le graphique selon le type de géométrie
-                    switch (feature.properties.originalType || feature.properties.shapeType) {
-                        case 'Circle':
-                            graphic = createReadOnlyCircleGraphic(feature, data.centerCoordinates);
-                            break;
-                        case 'Point':
-                            graphic = createReadOnlyPointGraphic(feature);
-                            break;
-                        case 'Polygon':
-                            graphic = createReadOnlyPolygonGraphic(feature);
-                            break;
-                        case 'Polyline':
-                            graphic = createReadOnlyPolylineGraphic(feature);
-                            break;
-                        case 'Rectangle':
-                            graphic = createReadOnlyRectangleGraphic(feature);
-                            break;
-                        default:
-                            console.warn('⚠️ Type de géométrie non supporté:', feature.properties.originalType);
-                    }
-                    
-                    if (graphic) {
-                        // Ajouter à la carte avec style lecture seule
-                        sketchLayer.add(graphic);
+                // Définir le mode lecture seule
+                function setReadOnlyMode(readOnly) {
+                    try {
+                        isReadOnlyMode = readOnly;
                         
-                        // Centrer la vue si demandé
-                        if (data.autoCenter) {
-                            const extent = graphic.geometry.extent || graphic.geometry;
-                            view.goTo({
-                                target: extent,
-                                zoom: extent.type === 'point' ? 16 : undefined
-                            }).then(() => {
-                                console.log('✅ Vue centrée sur la géométrie');
-                            });
+                        if (readOnly) {
+                            sketchWidget.disable();
+                            console.log('🔒 Mode lecture seule activé');
+                        } else {
+                            sketchWidget.enable();
+                            console.log('✏️ Mode édition activé');
                         }
                         
-                        // Désactiver les outils de dessin en mode lecture seule
-                        if (window.sketchWidget) {
-                            window.sketchWidget.cancel();
-                            window.sketchWidget.view = null; // Désactiver complètement
-                        }
-                        
-                        console.log('✅ Géométrie affichée en mode lecture seule');
+                    } catch (error) {
+                        console.error('❌ Erreur changement mode:', error);
                     }
-                    
-                } catch (error) {
-                    console.error('❌ Erreur affichage géométrie lecture seule:', error);
                 }
-            }
-            
-            // Fonction pour créer un cercle en lecture seule
-            function createReadOnlyCircleGraphic(feature, centerCoordinates) {
-                const radius = feature.properties.radius;
-                let center;
-                
-                // Utiliser les coordonnées du centre si disponibles
-                if (centerCoordinates && centerCoordinates.latitude && centerCoordinates.longitude) {
-                    center = [centerCoordinates.longitude, centerCoordinates.latitude];
-                } else if (feature.geometry.coordinates && feature.geometry.coordinates[0] && feature.geometry.coordinates[1]) {
-                    center = feature.geometry.coordinates;
-                } else {
-                    console.warn('⚠️ Coordonnées du centre manquantes pour le cercle');
-                    return null;
+
+                // Envoyer l'état de la carte
+                function sendMapState() {
+                    try {
+                        const mapState = {
+                            type: 'MAP_STATE',
+                            hasGeometry: sketchLayer.graphics.length > 0,
+                            geometryCount: sketchLayer.graphics.length,
+                            center: view.center,
+                            zoom: view.zoom
+                        };
+                        
+                        window.parent.postMessage(mapState, '*');
+                        console.log('📤 État de la carte envoyé:', mapState);
+                        
+                    } catch (error) {
+                        console.error('❌ Erreur envoi état carte:', error);
+                    }
                 }
+
+                // Notifier que la carte est prête
+                function notifyMapReady() {
+                    try {
+                        const message = {
+                            type: 'MAP_READY',
+                            timestamp: new Date().toISOString()
+                        };
+                        
+                        window.parent.postMessage(message, '*');
+                        console.log('📤 Carte prête notifiée');
+                        
+                    } catch (error) {
+                        console.error('❌ Erreur notification carte prête:', error);
+                    }
+                }
+
+                // Notifier qu'un dessin est complet
+                function notifyDrawingComplete(graphic) {
+                    try {
+                        const message = {
+                            type: 'DRAWING_COMPLETE',
+                            geometry: graphic.geometry,
+                            timestamp: new Date().toISOString()
+                        };
+                        
+                        window.parent.postMessage(message, '*');
+                        console.log('📤 Dessin complet notifié');
+                        
+                    } catch (error) {
+                        console.error('❌ Erreur notification dessin complet:', error);
+                    }
+                }
+
+                // Notifier qu'un dessin a été supprimé
+                function notifyDrawingDeleted() {
+                    try {
+                        const message = {
+                            type: 'DRAWING_DELETED',
+                            timestamp: new Date().toISOString()
+                        };
+                        
+                        window.parent.postMessage(message, '*');
+                        console.log('📤 Suppression dessin notifiée');
+                        
+                    } catch (error) {
+                        console.error('❌ Erreur notification suppression:', error);
+                    }
+                }
+
+                // Initialiser la carte quand le DOM est prêt
+                document.addEventListener('DOMContentLoaded', function() {
+                    console.log('🚀 DOM chargé, initialisation de la carte...');
+                    initializeMap();
+                });
                 
-                // Créer le cercle
-                const circle = new geometryEngine.geodesicBuffer(
-                    new Point({
-                        longitude: center[0],
-                        latitude: center[1]
-                    }),
-                    radius,
-                    'meters'
-                );
+                // FORCER l'initialisation immédiate (au cas où DOMContentLoaded ne se déclenche pas)
+                console.log('🚀 Tentative d\'initialisation immédiate...');
+                setTimeout(function() {
+                    if (!map) {
+                        console.log('⚠️ DOMContentLoaded non déclenché, initialisation forcée...');
+                        initializeMap();
+                    }
+                }, 1000);
                 
-                return new Graphic({
-                    geometry: circle,
-                    symbol: {
-                        type: "simple-fill",
-                        color: [51, 153, 255, 0.3], // Bleu clair transparent
-                        outline: {
-                            color: [51, 153, 255, 0.8], // Bleu plus foncé
-                            width: 2
-                        }
-                    }
-                });
-            }
-            
-            // Fonction pour créer un point en lecture seule
-            function createReadOnlyPointGraphic(feature) {
-                const coords = feature.geometry.coordinates;
-                
-                return new Graphic({
-                    geometry: new Point({
-                        longitude: coords[0],
-                        latitude: coords[1]
-                    }),
-                    symbol: {
-                        type: "simple-marker",
-                        color: [51, 153, 255, 0.8],
-                        outline: {
-                            color: [51, 153, 255, 1],
-                            width: 2
-                        },
-                        size: 12
-                    }
-                });
-            }
-            
-            // Fonction pour créer un polygone en lecture seule
-            function createReadOnlyPolygonGraphic(feature) {
-                return new Graphic({
-                    geometry: {
-                        type: "polygon",
-                        rings: feature.geometry.coordinates
-                    },
-                    symbol: {
-                        type: "simple-fill",
-                        color: [51, 153, 255, 0.3],
-                        outline: {
-                            color: [51, 153, 255, 0.8],
-                            width: 2
-                        }
-                    }
-                });
-            }
-            
-            // Fonction pour créer une polyligne en lecture seule
-            function createReadOnlyPolylineGraphic(feature) {
-                return new Graphic({
-                    geometry: {
-                        type: "polyline",
-                        paths: feature.geometry.coordinates
-                    },
-                    symbol: {
-                        type: "simple-line",
-                        color: [51, 153, 255, 0.8],
-                        width: 3
-                    }
-                });
-            }
-            
-            // Fonction pour créer un rectangle en lecture seule
-            function createReadOnlyRectangleGraphic(feature) {
-                // Les rectangles sont stockés comme des polygones
-                return createReadOnlyPolygonGraphic(feature);
-            }
-            
+            }); // Fin du require AMD
         </script>
+    </head>
+    <body>
+        <div id="mapView"></div>
     </body>
     </html>
 </apex:page>
