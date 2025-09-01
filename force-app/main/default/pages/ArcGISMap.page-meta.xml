@@ -1,6 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <ApexPage xmlns="http://soap.sforce.com/2006/04/metadata">
     <apiVersion>64.0</apiVersion>
-    <label>ArcGIS Map Page</label>
-    <description>Page Visualforce pour intégrer ArcGIS Maps SDK dans Lightning via iframe</description>
+    <availableInTouch>true</availableInTouch>
+    <confirmationTokenRequired>false</confirmationTokenRequired>
+    <label>ArcGIS Map</label>
+    <packageVersions>
+        <majorNumber>1</majorNumber>
+        <minorNumber>0</minorNumber>
+        <namespace>esriMap</namespace>
+    </packageVersions>
 </ApexPage>
+

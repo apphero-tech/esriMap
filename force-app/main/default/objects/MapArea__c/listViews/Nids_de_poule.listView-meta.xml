@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ListView xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Nids_de_poule</fullName>
+    <columns>NAME</columns>
+    <columns>CREATEDBY_USER</columns>
+    <columns>CREATED_DATE</columns>
+    <columns>FullAddress__c</columns>
+    <columns>GeoJSON__c</columns>
+    <columns>GeometryType__c</columns>
+    <filterScope>Everything</filterScope>
+    <label>Nids-de-poule</label>
+</ListView>

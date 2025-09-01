@@ -1,242 +1,299 @@
 import { LightningElement, api, track } from 'lwc';
 import { ShowToastEvent } from 'lightning/platformShowToastEvent';
 import { NavigationMixin } from 'lightning/navigation';
+
+// Import des méthodes Apex
+import getArcGISConfig from '@salesforce/apex/ArcGISConfigController.getPublicConfig';
 import saveMapAreas from '@salesforce/apex/MapAreaService.saveMapAreas';
-import getMapAreasByIds from '@salesforce/apex/MapAreaService.getMapAreasByIds';
 
 export default class EsriMapEditor extends NavigationMixin(LightningElement) {
-    @api champRelation;
-    @api idParent;
-    @api showSaveButton = false;
-
-    @track saveDisabled = true;
-    @track saving = false;
-    @track createdRecords = [];
+    // Propriétés publiques configurables
+    @api recordId;
+    @api basemap;
+    @api geocoderUrl;
+    @api height = '420px';
+    @api fitToParent = false;
+    @api locale;
     
-    _columns = [];
-
-    get isSaveButtonDisabled() {
-        return this.saveDisabled || this.saving;
+    // État interne
+    @track isLoading = true;
+    @track isMapReady = false;
+    @track errorMessage = '';
+    @track selectedGeometry = null;
+    @track selectedAddress = '';
+    @track mapCenter = { lat: 45.5017, lng: -73.5673 }; // Montréal par défaut
+    @track zoomLevel = 10;
+    
+    // Configuration ArcGIS
+    arcGISConfig = null;
+    
+    // Variables iframe
+    iframeLoaded = false;
+    iframeWindow = null;
+    
+    // Propriétés calculées
+    get isMapReadyNot() {
+        return !this.isMapReady;
     }
-
-    get hasCreatedRecords() {
-        return this.createdRecords && this.createdRecords.length > 0;
+    
+    get mapContainerStyle() {
+        return `height: ${this.height}; width: 100%;`;
     }
-
-    connectedCallback() {
-        window.addEventListener('message', this.handleVfMessage);
+    
+    get iframeUrl() {
+        return '/apex/ArcGISMap';
     }
-
+    
+    // Cycle de vie du composant
+    async connectedCallback() {
+        try {
+            console.log('🚀 esriMapEditor connecté, début initialisation ArcGIS...');
+            await this.initializeComponent();
+        } catch (error) {
+            console.error('❌ Erreur initialisation composant:', error);
+            this.errorMessage = 'Erreur lors de l\'initialisation du composant ArcGIS';
+            this.isLoading = false;
+        }
+    }
+    
+    // Initialisation du composant
+    async initializeComponent() {
+        try {
+            // Charger la configuration ArcGIS
+            await this.loadArcGISConfig();
+            
+            // Marquer comme terminé
+            this.isLoading = false;
+            console.log('✅ Composant ArcGIS initialisé avec succès');
+            
+        } catch (error) {
+            console.error('❌ Erreur initialisation:', error);
+            this.errorMessage = 'Impossible d\'initialiser la carte ArcGIS';
+            this.isLoading = false;
+        }
+    }
+    
+    // Charger la configuration ArcGIS
+    async loadArcGISConfig() {
+        try {
+            this.arcGISConfig = await getArcGISConfig();
+            console.log('✅ Configuration ArcGIS chargée:', this.arcGISConfig);
+        } catch (error) {
+            console.error('❌ Erreur chargement configuration:', error);
+            throw new Error('Impossible de charger la configuration ArcGIS');
+        }
+    }
+    
+    // Gestion des événements iframe
+    renderedCallback() {
+        const iframe = this.template.querySelector('iframe');
+        if (iframe && !this.iframeLoaded) {
+            iframe.addEventListener('load', () => {
+                this.iframeLoaded = true;
+                this.iframeWindow = iframe.contentWindow;
+                this.initializeIframeIfReady();
+            });
+        }
+        
+        // Écouter les messages de l'iframe
+        window.addEventListener('message', this.handleIframeMessage.bind(this));
+    }
+    
     disconnectedCallback() {
-        window.removeEventListener('message', this.handleVfMessage);
+        window.removeEventListener('message', this.handleIframeMessage.bind(this));
     }
-
-    get vfPageUrl() {
-        const baseUrl = window.location.origin;
-        return `${baseUrl}/apex/ArcGISMap`;
-    }
-
-    onIframeLoad = () => {
-        // noop, VF will send MAP_READY when initialized
-    };
-
-    handleVfMessage = (event) => {
-        const data = event && event.data ? event.data : undefined;
-        if (!data || !data.type) return;
-
-        switch (data.type) {
-            case 'MAP_READY': {
-                this.saveDisabled = false; // enable once map is ready and tools active
-                break;
-            }
-            case 'NO_SHAPE_SELECTED': {
-                this.saveDisabled = true;
-                break;
-            }
-            case 'SHAPE_SELECTED': {
-                this.saveDisabled = false;
-                break;
-            }
-            case 'SHAPE_DATA': {
-                this.persistShapeData(data.data && data.data.shapeData ? [data.data.shapeData] : []);
-                break;
-            }
-            case 'SAVE_ERROR': {
-                this.saving = false;
-                this.showToast('Erreur', (data.data && data.data.error) || 'Erreur de sauvegarde', 'error');
-                break;
-            }
-            default:
-                break;
-        }
-    };
-
-    handleSave = () => {
-        if (this.saving) return;
-        this.saving = true;
-        // Ask VF to compile current shapes and return SHAPE_DATA
-        this.postToVf({
-            type: 'SAVE_SHAPE',
-            data: { champRelation: this.champRelation, idParent: this.idParent }
-        });
-    };
-
-    postToVf(message) {
-        const iframe = this.template.querySelector('.map-iframe');
-        if (iframe && iframe.contentWindow) {
-            iframe.contentWindow.postMessage(message, '*');
+    
+    // Initialiser l'iframe si prête
+    initializeIframeIfReady() {
+        if (this.iframeLoaded && this.iframeWindow && this.arcGISConfig) {
+            this.sendMessageToIframe({
+                type: 'INIT_MAP',
+                config: {
+                    apiKey: this.arcGISConfig.apiKey,
+                    basemap: this.basemap || this.arcGISConfig.defaultBasemap || 'arcgis-navigation',
+                    geocoderUrl: this.geocoderUrl || this.arcGISConfig.geocoderUrl,
+                    height: this.height,
+                    locale: this.locale || this.arcGISConfig.locale || 'fr-CA',
+                    center: this.mapCenter,
+                    zoom: this.zoomLevel
+                }
+            });
+            
+            this.isMapReady = true;
+            console.log('✅ Iframe ArcGIS initialisée avec succès');
         }
     }
-
-    async persistShapeData(shapesData) {
-        if (!shapesData || shapesData.length === 0) {
-            this.saving = false;
-            this.showToast('Alerte', 'Aucune forme à sauvegarder', 'warning');
+    
+    // Envoyer un message à l'iframe
+    sendMessageToIframe(message) {
+        if (this.iframeWindow) {
+            this.iframeWindow.postMessage(message, '*');
+            console.log('📤 Message envoyé à iframe:', message);
+        }
+    }
+    
+    // Gérer les messages de l'iframe
+    handleIframeMessage(event) {
+        try {
+            const { type, data } = event.data;
+            console.log('📥 Message reçu de iframe:', { type, data });
+            
+            switch (type) {
+                case 'MAP_READY':
+                    this.isMapReady = true;
+                    console.log('✅ Carte ArcGIS prête');
+                    break;
+                    
+                case 'SHAPE_SELECTED':
+                    this.selectedGeometry = data.shape;
+                    this.selectedAddress = data.shape.address || '';
+                    console.log('✅ Forme sélectionnée:', this.selectedGeometry);
+                    this.showToast('Forme sélectionnée', `Type: ${data.shape.type}`, 'success');
+                    break;
+                    
+                case 'ADDRESS_SELECTED':
+                    this.selectedGeometry = data.address;
+                    this.selectedAddress = data.address.address || '';
+                    console.log('✅ Adresse sélectionnée:', this.selectedAddress);
+                    this.showToast('Adresse sélectionnée', this.selectedAddress, 'success');
+                    break;
+                    
+                case 'SHAPE_DATA':
+                    this.handleShapeData(data.shapeData);
+                    break;
+                    
+                case 'NO_SHAPE_SELECTED':
+                    this.selectedGeometry = null;
+                    this.selectedAddress = '';
+                    console.log('✅ Aucune forme sélectionnée');
+                    break;
+                    
+                case 'ERROR':
+                    console.error('❌ Erreur iframe:', data.error);
+                    this.errorMessage = data.error;
+                    break;
+                    
+                default:
+                    console.log('📥 Message non géré:', type);
+            }
+            
+        } catch (error) {
+            console.error('❌ Erreur traitement message iframe:', error);
+        }
+    }
+    
+    // Gérer les données de forme
+    handleShapeData(shapeData) {
+        try {
+            console.log('📊 Données de forme reçues:', shapeData);
+            
+            // Préparer les données pour la sauvegarde
+            const mapAreaData = {
+                Area_Type__c: shapeData.areaType,
+                Geometry_JSON__c: shapeData.geoJson,
+                Latitude__c: shapeData.latitude,
+                Longitude__c: shapeData.longitude,
+                Address__c: shapeData.address || ''
+            };
+            
+            // Sauvegarder automatiquement
+            this.saveMapAreaData(mapAreaData);
+            
+        } catch (error) {
+            console.error('❌ Erreur traitement données de forme:', error);
+            this.showToast('Erreur', 'Erreur lors du traitement des données', 'error');
+        }
+    }
+    
+    // Sauvegarder les données de zone de carte
+    async saveMapAreaData(mapAreaData) {
+        try {
+            const result = await saveMapAreas({ mapAreasJson: JSON.stringify([mapAreaData]) });
+            
+            if (result && result.length > 0) {
+                this.showToast('Succès', 'Zone de carte ArcGIS sauvegardée', 'success');
+                console.log('✅ Zone ArcGIS sauvegardée:', result[0]);
+            }
+            
+        } catch (error) {
+            console.error('❌ Erreur sauvegarde:', error);
+            this.showToast('Erreur', 'Impossible de sauvegarder la zone', 'error');
+        }
+    }
+    
+    // Sauvegarder la zone de la carte
+    async handleSaveMapArea() {
+        if (!this.selectedGeometry) {
+            this.showToast('Erreur', 'Aucune zone sélectionnée', 'error');
             return;
         }
-        try {
-            this.isSaving = true;
-            // Adapter au contrat Apex: saveMapAreas(List<ShapeData>)
-            const payload = [{
-                name: shapesData[0].name,
-                areaType: shapesData[0].areaType,
-                geoJson: shapesData[0].geoJson,
-                latitude: shapesData[0].latitude,
-                longitude: shapesData[0].longitude,
-                address: shapesData[0].address
-            }];
-
-            const result = await saveMapAreas({ shapesData: payload });
-            if (result && result.success && result.recordIds && result.recordIds.length > 0) {
-                // Enrichir via Apex pour récupérer Name standard, adresse, coords, auteur et date
-                let summaries = {};
-                try {
-                    summaries = await getMapAreasByIds({ recordIds: result.recordIds });
-                } catch (e) {
-                    summaries = {};
-                }
-                const newItems = [];
-                for (let id of result.recordIds) {
-                    const url = await this[NavigationMixin.GenerateUrl]({
-                        type: 'standard__recordPage',
-                        attributes: { recordId: id, actionName: 'view' }
-                    });
-                    const s = summaries && summaries[id] ? summaries[id] : null;
-                    newItems.push({
-                        id,
-                        url,
-                        name: s && s.Name ? s.Name : id,
-                        address: s && s.Address__c ? s.Address__c : (payload[0].address || ''),
-                        latitude: s && s.Latitude__c ? s.Latitude__c : null,
-                        longitude: s && s.Longitude__c ? s.Longitude__c : null,
-                        type: s && s.Area_Type__c ? s.Area_Type__c : (payload[0].areaType || ''),
-                        createdByName: s && s.CreatedBy ? s.CreatedBy.Name : '',
-                        createdDate: s && s.CreatedDate ? s.CreatedDate : null,
-                        geoJson: s && s.Geometry_JSON__c ? s.Geometry_JSON__c : (payload[0].geoJson || '')
-                    });
-                }
-                this.createdRecords = [...newItems, ...this.createdRecords];
-
-                this.saving = false;
-                this.saveDisabled = true;
-                this.showToast('Succès', result.message || 'Zone(s) enregistrée(s)', 'success');
-                this.postToVf({ type: 'CLEAR_ALL' });
-            } else {
-                this.saving = false;
-                const message = (result && result.message) ? result.message : 'Erreur inconnue lors de la sauvegarde';
-                const details = (result && result.errorDetails && result.errorDetails.length)
-                    ? ' Détails: ' + result.errorDetails.map(e => e.errorMessage).join(' | ')
-                    : '';
-                this.showToast('Erreur', message + details, 'error');
+        
+        // Demander la sauvegarde à l'iframe
+        this.sendMessageToIframe({
+            type: 'SAVE_SHAPE',
+            data: {
+                champRelation: 'Parent__c',
+                idParent: this.recordId
             }
-        } catch (e) {
-            this.saving = false;
-            this.showToast('Erreur', e && e.body && e.body.message ? e.body.message : (e.message || 'Erreur Apex'), 'error');
-        }
-    }
-
-    showToast(title, message, variant) {
-        this.dispatchEvent(new ShowToastEvent({ title, message, variant }));
-    }
-
-    // Clic sur une ligne: afficher/centrer la forme sur la carte (hybride cache/Apex)
-    async handleRowClick(event) {
-        const recordId = event.currentTarget.dataset.id;
-        const rec = this.createdRecords.find(r => r.id === recordId);
-        let areaType = rec?.type;
-        let geometryData = rec?.geoJson; // si présent en cache
-
-        if (!geometryData) {
-            // Fallback Apex si pas en cache
-            try {
-                const res = await fetch(`/services/data/v64.0/sobjects/Map_Area__c/${recordId}`);
-                if (res.ok) {
-                    const data = await res.json();
-                    geometryData = data.Geometry_JSON__c;
-                    areaType = data.Area_Type__c;
-                }
-            } catch (e) {
-                // ignorer
-            }
-        }
-        if (!geometryData || !areaType) return;
-
-        // Envoyer au VF
-        this.postToVf({
-            type: 'DISPLAY_SAVED_SHAPE',
-            geometryData,
-            areaType,
-            autoCenter: true
         });
     }
-
-    async handleViewOnMap(event) {
-        const recordId = event.currentTarget.dataset.id;
-        const rec = this.createdRecords.find(r => r.id === recordId);
-        let areaType = rec?.type;
-        let geometryData = rec?.geoJson;
-        if (!geometryData) {
-            try {
-                const summaries = await getMapAreasByIds({ recordIds: [recordId] });
-                const s = summaries && summaries[recordId] ? summaries[recordId] : null;
-                if (s) {
-                    geometryData = s.Geometry_JSON__c;
-                    areaType = s.Area_Type__c;
-                }
-            } catch (e) {}
+    
+    // Effacer la sélection
+    handleClearSelection() {
+        try {
+            // Envoyer message à l'iframe pour effacer
+            this.sendMessageToIframe({
+                type: 'CLEAR_ALL'
+            });
+            
+            // Effacer la géométrie sélectionnée
+            this.selectedGeometry = null;
+            this.selectedAddress = '';
+            
+            console.log('✅ Sélection ArcGIS effacée');
+            this.showToast('Sélection effacée', 'La sélection ArcGIS a été supprimée', 'info');
+            
+        } catch (error) {
+            console.error('❌ Erreur effacement sélection:', error);
         }
-        if (!geometryData || !areaType) return;
-        this.postToVf({ type: 'DISPLAY_SAVED_SHAPE', geometryData, areaType, autoCenter: true });
     }
-
-    // Lightning-datatable columns config
-    get columns() {
-        return [
-            { label: 'Nom', fieldName: 'url', type: 'url', initialWidth: 120, typeAttributes: { label: { fieldName: 'name' }, target: '_blank' } },
-            { label: 'Adresse', fieldName: 'address', type: 'text', wrapText: true, initialWidth: 250 },
-            { label: 'Latitude', fieldName: 'latitude', type: 'number', initialWidth: 100, cellAttributes: { alignment: 'left' }, typeAttributes: { minimumFractionDigits: 6, maximumFractionDigits: 6 } },
-            { label: 'Longitude', fieldName: 'longitude', type: 'number', initialWidth: 100, cellAttributes: { alignment: 'left' }, typeAttributes: { minimumFractionDigits: 6, maximumFractionDigits: 6 } },
-            { label: 'Type', fieldName: 'type', type: 'text', initialWidth: 80 },
-            { label: 'Créé par', fieldName: 'createdByName', type: 'text', initialWidth: 120 },
-            { label: 'Date', fieldName: 'createdDate', type: 'date-local', initialWidth: 140, typeAttributes: { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' } },
-            { type: 'action', typeAttributes: { rowActions: [ { label: 'Voir sur la carte', name: 'view_on_map' } ] }, initialWidth: 90 }
-        ];
-    }
-
-    get tableRows() {
-        return this.createdRecords;
-    }
-
-    handleRowAction(event) {
-        const actionName = event.detail.action.name;
-        const row = event.detail.row;
-        if (actionName === 'view_on_map') {
-            // Simuler le clic bouton précédent
-            const fakeEvt = { currentTarget: { dataset: { id: row.id } } };
-            this.handleViewOnMap(fakeEvt);
+    
+    // Centrer la carte sur un point
+    handleCenterMap() {
+        if (this.selectedGeometry) {
+            this.sendMessageToIframe({
+                type: 'CENTER_MAP',
+                longitude: this.selectedGeometry.center?.longitude || this.selectedGeometry.coordinates?.[0]?.longitude,
+                latitude: this.selectedGeometry.center?.latitude || this.selectedGeometry.coordinates?.[0]?.latitude,
+                zoom: 15
+            });
+            console.log('✅ Carte centrée sur la géométrie');
         }
+    }
+    
+    // Activer le mode dessin
+    handleActivateDrawing() {
+        this.sendMessageToIframe({
+            type: 'ACTIVATE_DRAWING_MODE'
+        });
+        console.log('✅ Mode dessin activé');
+    }
+    
+    // Désactiver le mode dessin
+    handleDeactivateDrawing() {
+        this.sendMessageToIframe({
+            type: 'DEACTIVATE_DRAWING_MODE'
+        });
+        console.log('✅ Mode dessin désactivé');
+    }
+    
+    // Afficher un toast
+    showToast(title, message, variant) {
+        const event = new ShowToastEvent({
+            title: title,
+            message: message,
+            variant: variant
+        });
+        this.dispatchEvent(event);
     }
 }
-
-
-
