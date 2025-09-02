@@ -58,6 +58,8 @@ export default class EsriMap extends NavigationMixin(LightningElement) {
     onMapReady() {
         console.log('🗺️ Iframe carte chargée');
         // La carte est prête pour l'utilisation
+        // Écouter les messages de Visualforce
+        window.addEventListener('message', this.handleMessageFromVF.bind(this));
     }
     
     // Gérer la sauvegarde de la forme
@@ -99,13 +101,15 @@ export default class EsriMap extends NavigationMixin(LightningElement) {
     
     // Gérer les messages reçus de Visualforce
     handleMessageFromVF(event) {
+        console.log('🔍 handleMessageFromVF appelé avec:', event);
+        
         // STANDARD SALESFORCE: Accepter les messages des domaines Visualforce et Lightning
         const isSalesforceDomain = event.origin.includes('force.com') || 
                                   event.origin.includes('salesforce.com') ||
                                   event.origin.includes('vf.force.com');
         
         if (!isSalesforceDomain) {
-            console.log('⚠️ Domaine non autorisé, message ignoré');
+            console.log('⚠️ Domaine non autorisé, message ignoré:', event.origin);
             return;
         }
         
@@ -186,7 +190,7 @@ export default class EsriMap extends NavigationMixin(LightningElement) {
                 address: shapeData.address
             }];
 
-            const result = await saveMapAreas({ shapesData: payload });
+            const result = await saveMapAreas(payload);
             if (result && result.success && result.recordIds && result.recordIds.length > 0) {
                 // Enrichir via Apex pour récupérer Name standard, adresse, coords, auteur et date
                 let summaries = {};
@@ -299,7 +303,7 @@ export default class EsriMap extends NavigationMixin(LightningElement) {
     
     // Écouter les messages de Visualforce
     connectedCallback() {
-        window.addEventListener('message', this.handleMessageFromVF.bind(this));
+        // L'écouteur sera ajouté dans onMapReady() après le chargement de l'iframe
     }
     
     disconnectedCallback() {
