@@ -123,9 +123,16 @@ export default class EsriMap extends NavigationMixin(LightningElement) {
                 
             case 'SHAPE_DATA':
                 // Appel Apex depuis LWC pour créer l'enregistrement réel
+                // Éviter les appels multiples si déjà en cours de sauvegarde
+                if (this.isSaving) {
+                    console.log('⚠️ Sauvegarde déjà en cours, ignoré');
+                    return;
+                }
+                
                 try {
                     const payloadShape = (data && (data.shapeData || data)) || (event.data && (event.data.shapeData || event.data.data && event.data.data.shapeData));
                     if (payloadShape) {
+                        console.log('💾 Traitement SHAPE_DATA:', payloadShape);
                         this.saveShapeViaApex(payloadShape);
                     } else {
                         // eslint-disable-next-line no-console

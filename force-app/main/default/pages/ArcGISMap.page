@@ -1551,45 +1551,22 @@
                     console.log('💾 Début de la sauvegarde de forme');
                     
                     try {
-                        // Récupérer toutes les formes disponibles (sketch + géocodage)
-                        let graphics = [];
+                        // Récupérer UNIQUEMENT la dernière forme du sketchLayer (éviter les doublons)
+                        let graphic = null;
                         
-                        // 1. Vérifier les graphiques du sketch widget
-                        if (sketchWidget && sketchWidget.view && sketchWidget.view.graphics) {
-                            const sketchGraphics = sketchWidget.view.graphics.filter(g => g.geometry);
-                            graphics = graphics.concat(sketchGraphics.toArray());
-                            console.log('📊 Graphiques sketch trouvés:', sketchGraphics.length);
+                        if (sketchLayer && sketchLayer.graphics && sketchLayer.graphics.length > 0) {
+                            // Prendre la dernière forme créée dans le sketchLayer
+                            graphic = sketchLayer.graphics.getItemAt(sketchLayer.graphics.length - 1);
+                            console.log('🎯 Graphic sélectionné pour sauvegarde (sketchLayer):', graphic);
+                        } else if (view && view.graphics && view.graphics.length > 0) {
+                            // Fallback : prendre la dernière forme de la vue principale (géocodage)
+                            graphic = view.graphics.getItemAt(view.graphics.length - 1);
+                            console.log('🎯 Graphic sélectionné pour sauvegarde (view):', graphic);
                         }
-                        
-                        // 2. Vérifier les graphiques de la vue principale (géocodage)
-                        if (view && view.graphics) {
-                            const viewGraphics = view.graphics.filter(g => g.geometry);
-                            graphics = graphics.concat(viewGraphics.toArray());
-                            console.log('📊 Graphiques view trouvés:', viewGraphics.length);
-                        }
-                        
-                        // 3. Vérifier le sketch layer
-                        if (sketchLayer && sketchLayer.graphics) {
-                            const layerGraphics = sketchLayer.graphics.filter(g => g.geometry);
-                            graphics = graphics.concat(layerGraphics.toArray());
-                            console.log('📊 Graphiques layer trouvés:', layerGraphics.length);
-                        }
-                        
-                        console.log('📊 Total graphiques trouvés:', graphics.length);
-                        
-                        if (graphics.length === 0) {
-                            console.warn('⚠️ Aucune forme à sauvegarder');
-                            notifyParent('SAVE_ERROR', { error: 'Aucune forme à sauvegarder' });
-                            return;
-                        }
-                        
-                        // Prendre la dernière forme créée
-                        const graphic = graphics[graphics.length - 1];
-                        console.log('🎯 Graphic sélectionné pour sauvegarde:', graphic);
                         
                         if (!graphic || !graphic.geometry) {
-                            console.error('❌ Graphic invalide ou sans géométrie');
-                            notifyParent('SAVE_ERROR', { error: 'Forme invalide' });
+                            console.warn('⚠️ Aucune forme à sauvegarder');
+                            notifyParent('SAVE_ERROR', { error: 'Aucune forme à sauvegarder' });
                             return;
                         }
                         
