@@ -127,25 +127,17 @@ export default class EsriMapEditor extends NavigationMixin(LightningElement) {
                 
             case 'SHAPE_DATA':
                 // Appel Apex depuis LWC pour créer l'enregistrement réel
-                // Éviter les appels multiples si déjà en cours de sauvegarde
-                if (this.isSaving) {
-                    console.log('⚠️ Sauvegarde déjà en cours, ignoré');
-                    return;
-                }
+                // Réinitialiser le flag isSaving pour permettre le traitement
+                this.isSaving = false;
                 
-                try {
-                    const payloadShape = (data && (data.shapeData || data)) || (event.data && (event.data.shapeData || event.data.data && event.data.data.shapeData));
-                    if (payloadShape) {
-                        console.log('💾 Traitement SHAPE_DATA:', payloadShape);
-                        this.saveShapeViaApex(payloadShape);
-                    } else {
-                        // eslint-disable-next-line no-console
-                        console.warn('SHAPE_DATA reçu sans contenu exploitable:', event.data);
-                        this.isSaving = false;
-                    }
-                } catch (e) {
+                const payloadShape = (data && (data.shapeData || data)) || (event.data && (event.data.shapeData || event.data.data && event.data.data.shapeData));
+                if (payloadShape) {
+                    console.log('💾 Traitement SHAPE_DATA:', payloadShape);
+                    this.saveShapeViaApex(payloadShape);
+                } else {
+                    // eslint-disable-next-line no-console
+                    console.warn('SHAPE_DATA reçu sans contenu exploitable:', event.data);
                     this.isSaving = false;
-                    this.showToast('Erreur', e.message || 'Erreur lors du traitement SHAPE_DATA', 'error');
                 }
                 break;
                 
@@ -179,18 +171,23 @@ export default class EsriMapEditor extends NavigationMixin(LightningElement) {
     // Sauvegarder via Apex (appel depuis SHAPE_DATA reçu de VF)
     async saveShapeViaApex(shapeData) {
         try {
-        this.isSaving = true;
+            this.isSaving = true;
+            console.log('🔍 shapeData reçu:', JSON.stringify(shapeData));
+            
             // Adapter au contrat Apex: saveMapAreas(List<ShapeData>)
             const payload = [{
-                name: shapeData.name,
+                name: shapeData.name || 'Point',
                 areaType: shapeData.areaType,
                 geoJson: shapeData.geoJson,
-                latitude: shapeData.latitude,
-                longitude: shapeData.longitude,
+                latitude: parseFloat(shapeData.latitude),
+                longitude: parseFloat(shapeData.longitude),
                 address: shapeData.address
             }];
 
-            const result = await saveMapAreas(payload);
+            console.log('📤 Payload envoyé à Apex:', JSON.stringify(payload));
+            console.log('🔍 Type de payload:', typeof payload, 'Type de payload[0]:', typeof payload[0]);
+            const result = await saveMapAreas({ shapesData: payload });
+            console.log('📥 Résultat Apex reçu:', JSON.stringify(result));
             if (result && result.success && result.recordIds && result.recordIds.length > 0) {
                 // Enrichir via Apex pour récupérer Name standard, adresse, coords, auteur et date
                 let summaries = {};
