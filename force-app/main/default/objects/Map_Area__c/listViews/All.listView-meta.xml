@@ -3,6 +3,8 @@
     <fullName>All</fullName>
     <columns>NAME</columns>
     <columns>Address__c</columns>
+    <columns>Area_Type__c</columns>
+    <columns>CREATED_DATE</columns>
     <columns>Latitude__c</columns>
     <columns>Longitude__c</columns>
     <filterScope>Everything</filterScope>
