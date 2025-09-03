@@ -22,8 +22,25 @@ export default class EsriMapViewer extends LightningElement {
     }
     
     renderedCallback() {
+        // Écouter les messages de la page Visualforce
+        window.addEventListener('message', this.handleMessageFromVF.bind(this));
+        
         if (this.currentRecordId) {
-            this.loadGeometryFromRecord();
+            // Ne pas charger immédiatement, attendre que l'iframe soit prête
+            console.log('🗺️ Composant rendu, recordId:', this.currentRecordId);
+        }
+    }
+    
+    // Gérer les messages reçus de Visualforce
+    handleMessageFromVF(event) {
+        const { type, data } = event.data;
+        console.log('📨 Message reçu de Visualforce:', type, data);
+        
+        if (type === 'MAP_READY') {
+            console.log('✅ Carte prête, chargement géométrie...');
+            if (this.currentRecordId) {
+                this.loadGeometryFromRecord();
+            }
         }
     }
     
@@ -88,8 +105,12 @@ export default class EsriMapViewer extends LightningElement {
     
     // Gérer le chargement de l'iframe
     onMapReady() {
-        if (this.currentRecordId) {
-            this.loadGeometryFromRecord();
-        }
+        console.log('🗺️ Iframe chargée, attente initialisation carte...');
+        // Attendre que la page Visualforce soit complètement initialisée
+        setTimeout(() => {
+            if (this.currentRecordId) {
+                this.loadGeometryFromRecord();
+            }
+        }, 2000); // Attendre 2 secondes pour l'initialisation complète
     }
 }
