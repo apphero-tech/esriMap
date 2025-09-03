@@ -60,7 +60,7 @@ export default class EsriMapViewer extends LightningElement {
         const message = {
             type: 'DISPLAY_READONLY_GEOMETRY',
             data: {
-                geometry: mapAreaData.Geometry_JSON__c,
+                geometryData: mapAreaData.Geometry_JSON__c,
                 areaType: mapAreaData.Area_Type__c,
                 latitude: mapAreaData.Latitude__c,
                 longitude: mapAreaData.Longitude__c,
@@ -74,6 +74,7 @@ export default class EsriMapViewer extends LightningElement {
             }
         };
         
+        console.log('🗺️ Envoi message centrage:', JSON.stringify(message));
         this.sendMessageToVF(message);
     }
     
