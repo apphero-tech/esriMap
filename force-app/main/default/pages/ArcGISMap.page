@@ -481,11 +481,11 @@
 
                 // Créer et configurer le widget Search avec autocomplétion (sans géolocalisation)
                 const searchWidget = new Search({
-                    view: view,
-                    sources: [{
-                        url: "https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer",
-                        singleLineFieldName: "SingleLine",
-                        name: "ArcGIS World Geocoding Service",
+                            view: view,
+                            sources: [{
+                                url: "https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer",
+                                singleLineFieldName: "SingleLine",
+                                name: "ArcGIS World Geocoding Service",
                         countryCode: "CAN", // Priorité au Canada
                         maxResults: 10,
                         maxSuggestions: 8,
@@ -525,7 +525,7 @@
 
                 // Créer et configurer le widget Locate (géolocalisation native ArcGIS)
                 const locateWidget = new Locate({
-                    view: view,
+                            view: view,
                     label: "Ma position",
                     useHeadingEnabled: true,
                     goToOverride: function(view, options) {
@@ -540,7 +540,7 @@
 
                 // Créer et configurer le widget BasemapToggle (changement de fond de carte)
                 const basemapToggleWidget = new BasemapToggle({
-                    view: view,
+                            view: view,
                     nextBasemap: "satellite", // Vue satellite comme alternative
                     label: "Basculer vers satellite"
                 });
@@ -660,8 +660,8 @@
                                     resolve(config);
                                 }
                             });
-                            
-                        } catch (error) {
+                        
+                    } catch (error) {
                             console.error('❌ Erreur lors du chargement de la configuration:', error);
                             
                             // Configuration par défaut en cas d'erreur
@@ -698,8 +698,8 @@
                     
                     // Créer le widget avec la configuration stockée
                 const sketchWidget = new Sketch({
-                    view: view,
-                    layer: sketchLayer,
+                            view: view,
+                            layer: sketchLayer,
                         creationMode: "hybrid",
                         defaultUpdateOptions: { 
                             enableRotation: false,
@@ -793,9 +793,9 @@
                         setupHighlightStyles();
                     
                     // Écouter la création de formes
-                    sketchWidget.on("create", function(event) {
+                        sketchWidget.on("create", function(event) {
                         console.log('🎨 Forme créée:', event);
-                        if (event.state === "complete") {
+                            if (event.state === "complete") {
                             handleShapeCreated(event.graphic, event.tool);
                         }
                     });
@@ -810,7 +810,7 @@
                     });
                     
                     // Écouter la désélection de formes
-                    sketchWidget.on("update", function(event) {
+                        sketchWidget.on("update", function(event) {
                         console.log('🔄 Forme mise à jour:', event);
                         if (event.state === "complete" && event.graphics && event.graphics.length > 0) {
                             console.log('✅ Forme mise à jour, envoi SHAPE_SELECTED');
@@ -819,7 +819,7 @@
                     });
                     
                     // Écouter la suppression de formes
-                    sketchWidget.on("delete", function(event) {
+                        sketchWidget.on("delete", function(event) {
                         console.log('🗑️ Forme supprimée:', event);
                         handleShapeDeletion();
                     });
@@ -1060,9 +1060,9 @@
                 // Fonction pour détecter si un polygone est un cercle
                 function isPolygonACircle(geometry) {
                     if (geometry.type !== 'polygon' || !geometry.rings || geometry.rings.length === 0) {
-                        return false;
-                    }
-                    
+                                    return false;
+                                }
+                                
                     const ring = geometry.rings[0];
                     if (ring.length < 4) return false;
                     
@@ -1449,7 +1449,7 @@
                                     }, '*');
                                     console.log('📨 Message SHAPE_SELECTED envoyé pour activer le bouton Save');
                                 }
-                            } else {
+                        } else {
                                 console.log('⚠️ Aucune adresse trouvée');
                                 graphic.attributes.address = "Adresse non trouvée";
                                 
@@ -2121,7 +2121,7 @@
                     const feature = JSON.parse(geometryData);
                     
                     // Effacer les graphiques existants
-                    sketchLayer.removeAll();
+                            sketchLayer.removeAll();
                     
                     let graphic = null;
                     

@@ -4,7 +4,7 @@ import { NavigationMixin } from 'lightning/navigation';
 import saveMapAreas from '@salesforce/apex/MapAreaService.saveMapAreas';
 import getMapAreasByIds from '@salesforce/apex/MapAreaService.getMapAreasByIds';
 
-export default class EsriMap extends NavigationMixin(LightningElement) {
+export default class EsriMapEditor extends NavigationMixin(LightningElement) {
     @api champRelation;
     @api idParent;
     @api recordId;
