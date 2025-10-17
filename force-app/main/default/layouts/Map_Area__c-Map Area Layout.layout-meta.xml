@@ -62,7 +62,6 @@
         <label>Map Visualization</label>
         <layoutColumns>
             <layoutItems>
-                <behavior>Default</behavior>
                 <component>c:esriMapViewer</component>
             </layoutItems>
         </layoutColumns>
