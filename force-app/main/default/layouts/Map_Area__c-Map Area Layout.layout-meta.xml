@@ -14,7 +14,10 @@
                 <behavior>Required</behavior>
                 <field>Area_Type__c</field>
             </layoutItems>
-            
+            <layoutItems>
+                <behavior>Edit</behavior>
+                <field>Case__c</field>
+            </layoutItems>
         </layoutColumns>
         <layoutColumns>
             <layoutItems>
@@ -31,6 +34,18 @@
             </layoutItems>
         </layoutColumns>
         <style>TwoColumnsTopToBottom</style>
+    </layoutSections>
+    <layoutSections>
+        <customLabel>true</customLabel>
+        <detailHeading>true</detailHeading>
+        <editHeading>false</editHeading>
+        <label>Map Visualization</label>
+        <layoutColumns>
+            <layoutItems>
+                <component>c:esriMapViewer</component>
+            </layoutItems>
+        </layoutColumns>
+        <style>OneColumn</style>
     </layoutSections>
     <layoutSections>
         <customLabel>false</customLabel>
@@ -54,18 +69,6 @@
             </layoutItems>
         </layoutColumns>
         <style>TwoColumnsTopToBottom</style>
-    </layoutSections>
-    <layoutSections>
-        <customLabel>true</customLabel>
-        <detailHeading>true</detailHeading>
-        <editHeading>false</editHeading>
-        <label>Map Visualization</label>
-        <layoutColumns>
-            <layoutItems>
-                <component>c:esriMapViewer</component>
-            </layoutItems>
-        </layoutColumns>
-        <style>OneColumn</style>
     </layoutSections>
     <layoutSections>
         <customLabel>true</customLabel>
