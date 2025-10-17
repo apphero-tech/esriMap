@@ -19,6 +19,18 @@ public with sharing class MapAreaService {
     }
     
     /**
+     * Classe wrapper pour la sauvegarde avec contexte de relation
+     */
+    public class SaveRequest {
+        @AuraEnabled
+        public List<ShapeData> shapesData { get; set; }
+        @AuraEnabled
+        public String parentRecordId { get; set; }
+        @AuraEnabled
+        public String relationshipFieldName { get; set; }
+    }
+    
+    /**
      * Classe wrapper pour la réponse
      */
     public class SaveResult {
@@ -78,6 +90,47 @@ public with sharing class MapAreaService {
     }
 
     /**
+     * Récupère les zones de carte liées à un enregistrement parent via un champ lookup
+     * @param parentRecordId ID de l'enregistrement parent (Case, Account, etc.)
+     * @param relationshipFieldName Nom API du champ lookup sur Map_Area__c (ex: Case__c)
+     * @return Map des zones liées, clé = Id, valeur = Map_Area__c
+     */
+    @AuraEnabled(cacheable=true)
+    public static Map<Id, Map_Area__c> getMapAreasByRelationship(String parentRecordId, String relationshipFieldName) {
+        Map<Id, Map_Area__c> result = new Map<Id, Map_Area__c>();
+        
+        if (String.isBlank(parentRecordId) || String.isBlank(relationshipFieldName)) {
+            return result;
+        }
+        
+        try {
+            // Valider que le champ existe et qu'il est une relation
+            Schema.DescribeFieldResult fieldDescribe = Map_Area__c.sObjectType.getDescribe()
+                .fields.getMap().get(relationshipFieldName).getDescribe();
+            
+            if (fieldDescribe == null || fieldDescribe.getType() != Schema.DisplayType.REFERENCE) {
+                System.debug('⚠️ Le champ ' + relationshipFieldName + ' n\'existe pas ou n\'est pas une relation');
+                return result;
+            }
+            
+            // Construire la requête SOQL dynamique
+            String query = 'SELECT Id, Name, Address__c, Latitude__c, Longitude__c, ' +
+                          'Area_Type__c, Geometry_JSON__c, CreatedBy.Name, CreatedDate ' +
+                          'FROM Map_Area__c WHERE ' + relationshipFieldName + ' = :parentRecordId';
+            
+            for (Map_Area__c ma : Database.query(query)) {
+                result.put(ma.Id, ma);
+            }
+            
+        } catch (Exception e) {
+            System.debug('❌ Erreur getMapAreasByRelationship: ' + e.getMessage());
+            // Retourner une map vide au lieu de lancer une exception pour ne pas bloquer le composant
+        }
+        
+        return result;
+    }
+
+    /**
      * Classe pour détailler les erreurs
      */
     public class ErrorDetail {
@@ -99,10 +152,10 @@ public with sharing class MapAreaService {
     }
     
     /**
-     * Méthode principale pour sauvegarder les formes en lot
+     * Méthode principale pour sauvegarder les formes en lot avec lien de relation automatique
      */
     @AuraEnabled
-    public static SaveResult saveMapAreas(List<ShapeData> shapesData) {
+    public static SaveResult saveMapAreas(List<ShapeData> shapesData, String parentRecordId, String relationshipFieldName) {
         SaveResult result = new SaveResult();
         
         try {
@@ -160,6 +213,18 @@ public with sharing class MapAreaService {
                 // Adresse si disponible
                 if (String.isNotBlank(shapeData.address)) {
                     mapArea.Address__c = shapeData.address.left(255);
+                }
+                
+                // Peuplage automatique du champ de relation si fourni
+                if (String.isNotBlank(parentRecordId) && String.isNotBlank(relationshipFieldName)) {
+                    try {
+                        // Assigner dynamiquement le champ de relation avec l'ID du parent
+                        mapArea.put(relationshipFieldName, parentRecordId);
+                        System.debug('✅ Champ ' + relationshipFieldName + ' peuplé avec ' + parentRecordId);
+                    } catch (Exception e) {
+                        System.debug('⚠️ Impossible de peupler le champ ' + relationshipFieldName + ': ' + e.getMessage());
+                        // Continuer la sauvegarde même si le lien échoue
+                    }
                 }
                 
                 mapAreasToInsert.add(mapArea);

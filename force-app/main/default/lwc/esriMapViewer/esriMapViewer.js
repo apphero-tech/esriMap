@@ -3,6 +3,8 @@ import getMapAreaGeometry from '@salesforce/apex/MapAreaService.getMapAreaGeomet
 
 export default class EsriMapViewer extends LightningElement {
     @api recordId;
+    @api title;
+    @api initialZoom = 12;
     isLoading = true;
     hasGeometry = false;
     
@@ -18,6 +20,9 @@ export default class EsriMapViewer extends LightningElement {
     }
 
     get cardTitle() {
+        if (this.title) {
+            return this.title;
+        }
         return this.hasGeometry ? 'Localisation sur la carte' : 'Aucune géométrie disponible';
     }
     

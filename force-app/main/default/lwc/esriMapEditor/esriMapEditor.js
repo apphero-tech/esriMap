@@ -1,16 +1,22 @@
-import { LightningElement, api, track } from 'lwc';
+import { LightningElement, api, track, wire } from 'lwc';
 import { ShowToastEvent } from 'lightning/platformShowToastEvent';
 import { NavigationMixin } from 'lightning/navigation';
 import saveMapAreas from '@salesforce/apex/MapAreaService.saveMapAreas';
 import getMapAreasByIds from '@salesforce/apex/MapAreaService.getMapAreasByIds';
+import getMapAreasByRelationship from '@salesforce/apex/MapAreaService.getMapAreasByRelationship';
 
 export default class EsriMapEditor extends NavigationMixin(LightningElement) {
+    @api recordId;                          // ID du Case/Account/etc
+    @api relationshipFieldName;             // Nom du champ lookup (ex: Case__c)
+    @api title;                             // Titre personnalisé
+    @api readOnly = false;                  // Mode lecture seule
+    
+    // Legacy properties - kept for backward compatibility but not exposed in meta.xml for CRM
     @api champRelation;
     @api idParent;
-    @api recordId;
     @api autoCenter = false;
-    @api readOnly = false;
     @api showControls = false;
+    @api initialZoom = 12;
     
     isMapInitialized = false;
     coordinates = { latitude: 0, longitude: 0 };
@@ -19,6 +25,8 @@ export default class EsriMapEditor extends NavigationMixin(LightningElement) {
     @track createdRecords = [];
     
     _columns = [];
+    isLoadingRelated = false;
+    errorMessage = '';
     
     // URL de la page Visualforce avec ArcGIS
     get vfPageUrl() {
@@ -31,21 +39,84 @@ export default class EsriMapEditor extends NavigationMixin(LightningElement) {
         return this.isSaving ? 'Sauvegarde...' : 'Enregistrer';
     }
     
+    // Titre dynamique de la page
+    get pageTitle() {
+        return this.title || 'Carte ArcGIS Interactive';
+    }
+    
     // État du bouton (désactivé si pas de forme ou en cours de sauvegarde)
     get isSaveButtonDisabled() {
-        return this._isSaveButtonDisabled || this.isSaving;
+        return this._isSaveButtonDisabled || this.isSaving || this.readOnly;
     }
     
     get hasCreatedRecords() {
         return this.createdRecords && this.createdRecords.length > 0;
     }
-    
+
+    get showRelatedZonesSection() {
+        return !this.readOnly && this.relationshipFieldName;
+    }
+
+    connectedCallback() {
+        this.loadRelatedRecords();
+    }
+
     renderedCallback() {
         if (this.isMapInitialized) {
             return;
         }
         this.isMapInitialized = true;
         this.initializeIframe();
+    }
+
+    /**
+     * Charge les zones liées au Case/Account via le champ de relation
+     */
+    async loadRelatedRecords() {
+        if (!this.recordId || !this.relationshipFieldName) {
+            console.log('ℹ️ recordId ou relationshipFieldName absent - pas de chargement des zones liées');
+            return;
+        }
+
+        this.isLoadingRelated = true;
+        this.errorMessage = '';
+
+        try {
+            const relatedRecords = await getMapAreasByRelationship({ 
+                parentRecordId: this.recordId, 
+                relationshipFieldName: this.relationshipFieldName 
+            });
+
+            // Transformer la Map en tableau
+            const recordsArray = [];
+            for (const [id, record] of Object.entries(relatedRecords)) {
+                const url = await this[NavigationMixin.GenerateUrl]({
+                    type: 'standard__recordPage',
+                    attributes: { recordId: id, actionName: 'view' }
+                });
+                recordsArray.push({
+                    id,
+                    url,
+                    name: record.Name || id,
+                    address: record.Address__c || '',
+                    latitude: record.Latitude__c || null,
+                    longitude: record.Longitude__c || null,
+                    type: record.Area_Type__c || '',
+                    createdByName: record.CreatedBy ? record.CreatedBy.Name : '',
+                    createdDate: record.CreatedDate || null,
+                    geoJson: record.Geometry_JSON__c || ''
+                });
+            }
+
+            this.createdRecords = recordsArray;
+            console.log(`✅ ${recordsArray.length} zone(s) liée(s) chargée(s)`);
+
+        } catch (error) {
+            console.error('❌ Erreur lors du chargement des zones liées:', error);
+            this.errorMessage = 'Erreur lors du chargement des zones liées au ' + (this.relationshipFieldName || 'parent');
+        } finally {
+            this.isLoadingRelated = false;
+        }
     }
 
     // Initialiser l'iframe
@@ -64,15 +135,19 @@ export default class EsriMapEditor extends NavigationMixin(LightningElement) {
     
     // Gérer la sauvegarde de la forme
     handleSaveShape() {
-        if (this.isSaving) return;
+        if (this.isSaving || this.readOnly) return;
         
         this.isSaving = true;
         console.log('💾 Sauvegarde de la forme...');
         
         // Envoyer le message de sauvegarde à Visualforce
+        // En mode CRM avec relationshipFieldName, on doit passer le recordId et le champ
         this.sendMessageToVF({
             type: 'SAVE_SHAPE',
             data: {
+                parentRecordId: this.recordId,
+                relationshipFieldName: this.relationshipFieldName,
+                // Backward compat
                 champRelation: this.champRelation,
                 idParent: this.idParent
             }
@@ -150,6 +225,8 @@ export default class EsriMapEditor extends NavigationMixin(LightningElement) {
                 this.isSaving = false;
                 this._isSaveButtonDisabled = true;
                 this.showToast('Succès', 'Forme sauvegardée avec succès', 'success');
+                // Recharger les zones liées
+                this.loadRelatedRecords();
                 break;
                 
             case 'SAVE_ERROR':
@@ -174,7 +251,7 @@ export default class EsriMapEditor extends NavigationMixin(LightningElement) {
             this.isSaving = true;
             console.log('🔍 shapeData reçu:', JSON.stringify(shapeData));
             
-            // Adapter au contrat Apex: saveMapAreas(List<ShapeData>)
+            // Adapter au contrat Apex: saveMapAreas(List<ShapeData>, parentRecordId, relationshipFieldName)
             const payload = [{
                 name: shapeData.name || 'Point',
                 areaType: shapeData.areaType,
@@ -185,8 +262,12 @@ export default class EsriMapEditor extends NavigationMixin(LightningElement) {
             }];
 
             console.log('📤 Payload envoyé à Apex:', JSON.stringify(payload));
-            console.log('🔍 Type de payload:', typeof payload, 'Type de payload[0]:', typeof payload[0]);
-            const result = await saveMapAreas({ shapesData: payload });
+            console.log('📍 Context: parentRecordId=' + this.recordId + ', relationshipFieldName=' + this.relationshipFieldName);
+            const result = await saveMapAreas({ 
+                shapesData: payload,
+                parentRecordId: this.recordId,
+                relationshipFieldName: this.relationshipFieldName
+            });
             console.log('📥 Résultat Apex reçu:', JSON.stringify(result));
             if (result && result.success && result.recordIds && result.recordIds.length > 0) {
                 // Enrichir via Apex pour récupérer Name standard, adresse, coords, auteur et date
@@ -296,11 +377,6 @@ export default class EsriMapEditor extends NavigationMixin(LightningElement) {
             variant: variant
         });
         this.dispatchEvent(event);
-    }
-    
-    // Écouter les messages de Visualforce
-    connectedCallback() {
-        // L'écouteur sera ajouté dans onMapReady() après le chargement de l'iframe
     }
     
     disconnectedCallback() {

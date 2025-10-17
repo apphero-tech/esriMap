@@ -1,7 +1,7 @@
 <template>
     <div class="esri-map-container">
         <div class="page-header">
-            <h1 class="page-title">Carte ArcGIS Interactive</h1>
+            <h1 class="page-title">{pageTitle}</h1>
         </div>
 
         <!-- Carte -->
@@ -20,26 +20,51 @@
         </div>
 
         <!-- Boutons principaux centrés -->
-        <div class="primary-buttons buttons-section slds-text-align_center">
-            <lightning-button 
-                variant="brand" 
-                label={saveButtonLabel}
-                title="Enregistrer la forme actuellement sélectionnée sur la carte"
-                disabled={isSaveButtonDisabled}
-                onclick={handleSaveShape}
-                class="btn-primary">
-            </lightning-button>
-            <lightning-button 
-                label="Annuler"
-                variant="neutral"
-                onclick={handleCancel}
-                class="btn-secondary">
-            </lightning-button>
-        </div>
+        <template if:false={readOnly}>
+            <div class="primary-buttons buttons-section slds-text-align_center">
+                <lightning-button 
+                    variant="brand" 
+                    label={saveButtonLabel}
+                    title="Enregistrer la forme actuellement sélectionnée sur la carte"
+                    disabled={isSaveButtonDisabled}
+                    onclick={handleSaveShape}
+                    class="btn-primary">
+                </lightning-button>
+                <lightning-button 
+                    label="Annuler"
+                    variant="neutral"
+                    onclick={handleCancel}
+                    class="btn-secondary">
+                </lightning-button>
+            </div>
+        </template>
 
-        <!-- Liste des enregistrements créés - version précédente (CSS Grid) -->
+        <!-- Message d'erreur -->
+        <template if:true={errorMessage}>
+            <div class="slds-notify slds-notify_alert slds-alert_error slds-m-top_medium" role="alert">
+                <span class="slds-assistive-text">error</span>
+                <svg class="slds-icon slds-icon_small slds-m-right_small" viewBox="0 0 24 24">
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
+                </svg>
+                <span class="slds-m-left_small">{errorMessage}</span>
+            </div>
+        </template>
+
+        <!-- Liste des enregistrements créés/liés -->
         <div class="enregistrements-section records-card content-section">
-            <div class="section-header section-title">Enregistrements créés</div>
+            <div class="section-header section-title">
+                <template if:true={isLoadingRelated}>
+                    <lightning-spinner alternative-text="Chargement des zones liées..."></lightning-spinner>
+                </template>
+                <template if:false={isLoadingRelated}>
+                    <template if:true={readOnly}>
+                        Enregistrements liés
+                    </template>
+                    <template if:false={readOnly}>
+                        Enregistrements créés
+                    </template>
+                </template>
+            </div>
             <!-- En-têtes -->
             <div class="records-table table-header-row">
                 <div class="table-header">Nom</div>
@@ -67,7 +92,14 @@
                 </div>
             </template>
             <template if:false={hasCreatedRecords}>
-                <div class="slds-p-around_medium slds-text-align_center slds-text-color_weak">Aucun enregistrement pour l'instant.</div>
+                <div class="slds-p-around_medium slds-text-align_center slds-text-color_weak">
+                    <template if:true={readOnly}>
+                        Aucune zone liée pour l'instant.
+                    </template>
+                    <template if:false={readOnly}>
+                        Aucun enregistrement pour l'instant.
+                    </template>
+                </div>
             </template>
         </div>
     </div>

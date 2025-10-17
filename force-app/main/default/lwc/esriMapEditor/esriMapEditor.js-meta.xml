@@ -6,16 +6,21 @@
         <target>lightning__AppPage</target>
         <target>lightning__HomePage</target>
         <target>lightning__RecordPage</target>
+        <target>lightning__FlowScreen</target>
     </targets>
     <targetConfigs>
         <targetConfig targets="lightning__AppPage,lightning__HomePage,lightning__RecordPage">
-            <property name="champRelation" type="String" label="Champ de relation" description="Nom API du champ lookup vers l'objet parent (optionnel)"/>
-            <property name="idParent" type="String" label="ID de l'enregistrement parent" description="ID de l'enregistrement parent pour lier les formes (optionnel)"/>
+            <property name="recordId" type="String" description="ID de l'enregistrement parent (Case, Account, etc.) - Automatique sur Record Page"/>
+            <property name="relationshipFieldName" type="String" label="Nom du champ de relation" description="Nom API du champ lookup sur Map_Area__c (ex: Case__c, Account__c) - Optionnel si pas de liaison"/>
+            <property name="title" type="String" label="Titre" description="Titre personnalisé du composant - Optionnel"/>
+            <property name="readOnly" type="Boolean" default="false" description="Mode lecture seule pour affichage des zones"/>
+        </targetConfig>
+        <targetConfig targets="lightning__FlowScreen">
             <property name="recordId" type="String" description="ID de l'enregistrement Map_Area__c à afficher"/>
-            <property name="autoCenter" type="Boolean" default="false" description="Centrer automatiquement la carte"/>
+            <property name="title" type="String" label="Titre" description="Titre de la carte (optionnel)"/>
+            <property name="initialZoom" type="Integer" label="Zoom initial" description="Niveau de zoom initial (1-28, par défaut 12)"/>
             <property name="readOnly" type="Boolean" default="false" description="Mode lecture seule"/>
-            <property name="showControls" type="Boolean" default="true" description="Afficher les contrôles"/>
         </targetConfig>
     </targetConfigs>
-    <description>Composant LWC simple pour intégrer une carte ArcGIS interactive avec tous les contrôles</description>
+    <description>Composant LWC pour intégrer une carte ArcGIS interactive avec zones liées par lookup</description>
 </LightningComponentBundle>
