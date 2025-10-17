@@ -1,99 +1,126 @@
 # 🗺️ ESRI Map - Composant Salesforce ArcGIS
 
-Un composant Salesforce Lightning Web Component (LWC) qui intègre des cartes ESRI/ArcGIS avec outils de dessin et géocodage automatique.
+Un composant Salesforce Lightning Web Component (LWC) qui intègre des cartes ESRI/ArcGIS avec outils de dessin, géocodage automatique et liaison automatique aux enregistrements parent.
 
 ## ✨ Fonctionnalités Principales
 
 - **🗺️ Carte ArcGIS interactive** : Intégration native via Maps SDK for JavaScript
 - **✏️ Outils de dessin** : Point, Polyline, Polygon, Rectangle, Circle
 - **📍 Géocodage automatique** : Clic sur la carte pour obtenir l'adresse
-- **💾 Sauvegarde intégrée** : Enregistrement automatique dans `Map_Area__c`
+- **💾 Sauvegarde intégrée** : Enregistrement automatique dans `Map_Area__c` avec liaison parent
+- **🔗 Liaison automatique** : Les zones sont automatiquement liées au Case/Account/etc via champ lookup
 - **⚙️ Configuration dynamique** : Activation/désactivation des outils via Custom Settings
 - **🎨 Interface Lightning** : Composant LWC respectant les standards Salesforce
 
 ## 🏗️ Architecture Technique
 
 ### **Composants Principaux**
-- **LWC** : `esriMap` - Interface utilisateur et gestion des données
+- **LWC Editor** : `esriMapEditor` - Éditeur avec carte interactive et liaison automatique
+- **LWC Viewer** : `esriMapViewer` - Visualisation en lecture seule
 - **Page Visualforce** : `ArcGISMap.page` - Intégration de la carte ArcGIS
-- **Service Apex** : `MapAreaService` - Sauvegarde des zones de carte
+- **Service Apex** : `MapAreaService` - Sauvegarde des zones avec gestion des relations dynamiques
 - **Custom Settings** : `ArcGIS_Tool_Settings__c` - Configuration des outils
 
 ### **Objets Salesforce**
-- **Map_Area__c** : Stockage des zones de carte avec coordonnées et adresses
-- **ArcGIS_Tool_Settings__c** : Configuration des outils de dessin (List Type)
+- **Map_Area__c** : Stockage des zones de carte (coordonnées, adresses, géométrie)
+- **Champ de relation dynamique** : Lookup vers l'objet parent (Case__c, Account__c, etc.)
 
-## 🚀 Installation
+## 🚀 Installation & Déploiement
 
-### **1. Déploiement**
-```bash
-sf project deploy start --target-org VotreOrg
+### **Orgs Principales**
+```
+EsriMapDev        → Sandbox de développement principal
+SJSR-TESTCARTE    → Sandbox client pour tests
+esriTestScratch    → Scratch org temporaire (30j)
 ```
 
-### **2. Configuration des Permissions**
-- **Profils** : Accès aux composants LWC et objets personnalisés
-- **Permission Sets** : `esriMap_Admin`, `esriMap_Internal`, `esriMap_External`
-- **Onglets** : Activation de l'onglet Map Area dans les profils
+### **Déploiement sur une Org**
+```bash
+# Déployer sur l'org par défaut
+sf project deploy start
 
-### **3. Configuration des Outils**
-- **Setup** → **Custom Settings** → **ArcGIS Tool Settings**
-- **Activer/désactiver** les outils de dessin selon vos besoins
+# Déployer sur une org spécifique
+sf project deploy start --target-org EsriMapDev
+sf project deploy start --target-org SJSR-TESTCARTE
+sf project deploy start --target-org esriTestScratch
+```
+
+### **Configuration Post-Déploiement**
+1. **Créer un champ lookup** sur `Map_Area__c` vers l'objet parent (ex: `Case__c`)
+2. **Ajouter Permission Sets** : Assigner `esriMap_Admin` ou `esriMap_Internal` aux utilisateurs
+3. **Ajouter le composant** sur une Record Page (Case, Account, etc.)
+4. **Configurer les propriétés** du composant
 
 ## 📱 Utilisation
 
-### **Ajout du Composant**
-```html
-<!-- Dans une page Lightning -->
-<c-esri-map></c-esri-map>
+### **Propriétés du Composant esriMapEditor (CRM)**
 
-<!-- Ou utilisation directe de la page Visualforce -->
-/apex/ArcGISMap
-```
+| Propriété | Type | Défaut | Description |
+|-----------|------|--------|-------------|
+| `recordId` | String | Auto | ID du Case/Account/etc (automatique sur Record Page) |
+| `relationshipFieldName` | String | — | Nom du champ lookup (ex: `Case__c`) |
+| `title` | String | — | Titre personnalisé du composant |
+| `readOnly` | Boolean | false | Mode lecture seule |
 
-### **Fonctionnalités Disponibles**
+### **Propriétés du Composant esriMapEditor (Flow)**
 
-#### **🎯 Sélection d'Adresse**
-1. **Cliquer** n'importe où sur la carte
-2. **Adresse géocodée** automatiquement affichée
-3. **Cliquer "Save Shape"** pour sauvegarder
-4. **Enregistrement créé** dans `Map_Area__c`
+| Propriété | Type | Défaut | Description |
+|-----------|------|--------|-------------|
+| `recordId` | String | — | ID de la zone à afficher |
+| `title` | String | — | Titre personnalisé |
+| `initialZoom` | Integer | 12 | Niveau de zoom initial (1-28) |
+| `readOnly` | Boolean | false | Mode lecture seule |
 
-#### **✏️ Dessin de Formes**
-1. **Utiliser** les outils Sketch dans la carte
-2. **Dessiner** Point, Polyline, Polygon, Rectangle, Circle
-3. **Cliquer "Save Shape"** pour sauvegarder
-4. **Données géométriques** stockées en GeoJSON
+### **Workflow Typique**
+
+1. **Sur une Case Record Page :**
+   - Ajouter `esriMapEditor` 
+   - Configurer `relationshipFieldName = "Case__c"`
+   - Les zones existantes se chargent automatiquement
+   - Les nouvelles zones sont automatiquement liées au Case
+
+2. **Dans un Flow :**
+   - Ajouter `esriMapEditor` 
+   - Passer l'ID du Case/Account via `recordId`
+   - Les zones sont liées automatiquement à la sauvegarde
+
+3. **En Lecture Seule :**
+   - Configurer `readOnly = true`
+   - Affiche les zones liées sans possibilité de modification
 
 ### **Types de Zones Supportés**
-- **Point** : Coordonnées précises (utilisé pour les adresses)
+- **Point** : Coordonnées précises
 - **Polyline** : Lignes et chemins
 - **Polygon** : Formes libres fermées
 - **Rectangle** : Rectangles par coins
 - **Circle** : Cercles par centre et rayon
 
-## 🔧 Configuration Avancée
+## 🔧 API Apex
 
-### **Custom Settings - ArcGIS Tool Settings**
-```xml
-<!-- Configuration des outils -->
-<apex:page>
-    <apex:customSettings type="ArcGIS_Tool_Settings__c" />
-</apex:page>
+### **MapAreaService.getMapAreasByRelationship()**
+```apex
+// Récupère les zones liées à un enregistrement parent
+Map<Id, Map_Area__c> zones = MapAreaService.getMapAreasByRelationship(
+    '001xx000003DHP',  // parentRecordId
+    'Case__c'          // relationshipFieldName
+);
 ```
 
-### **Champs Map_Area__c**
-- **Name** : Nom automatique (MAP-XXXX)
-- **Area_Type__c** : Type de zone (Point, Polyline, etc.)
-- **GeoJSON__c** : Données géométriques au format GeoJSON
-- **Latitude__c** : Coordonnée latitude (centroïde)
-- **Longitude__c** : Coordonnée longitude (centroïde)
-- **Address__c** : Adresse géocodée (si disponible)
+### **MapAreaService.saveMapAreas()**
+```apex
+// Crée des zones et les lie automatiquement au parent
+MapAreaService.SaveResult result = MapAreaService.saveMapAreas(
+    shapesList,              // List<ShapeData>
+    '001xx000003DHP',        // parentRecordId
+    'Case__c'                // relationshipFieldName
+);
+```
 
 ## 🌐 Technologies Utilisées
 
-- **Salesforce** : LWC, Visualforce, Apex, Custom Settings
+- **Salesforce** : LWC, Visualforce, Apex, Dynamic Binding
 - **ArcGIS** : Maps SDK for JavaScript, Sketch Widget, Geocoding
-- **Standards** : GeoJSON, WGS84, SLDS (Salesforce Lightning Design System)
+- **Standards** : GeoJSON, WGS84, SLDS
 
 ## 📋 Prérequis
 
@@ -102,36 +129,11 @@ sf project deploy start --target-org VotreOrg
 - **Permissions** : Création/modification d'objets personnalisés
 - **API** : Accès aux services ArcGIS (géocodage public)
 
-## 🔍 Dépannage
+## 🤝 Support
 
-### **Problèmes Courants**
-
-#### **Outils de dessin non visibles**
-- Vérifier la configuration dans Custom Settings
-- Rafraîchir la page après modification des paramètres
-
-#### **Erreur de sauvegarde**
-- Vérifier les permissions FLS sur `Map_Area__c`
-- Contrôler la validité des coordonnées
-
-#### **Géocodage non fonctionnel**
-- Vérifier la connectivité internet
-- Contrôler les restrictions de domaine
-
-## 📚 Ressources
-
-- **Documentation ArcGIS** : [Maps SDK for JavaScript](https://developers.arcgis.com/javascript/)
-- **Salesforce LWC** : [Lightning Web Components](https://developer.salesforce.com/docs/component-library/)
-- **GeoJSON** : [Format de données géospatiales](https://geojson.org/)
-
-## 🤝 Contribution
-
-Ce projet est maintenu pour l'intégration ArcGIS dans Salesforce. Les contributions sont les bienvenues pour améliorer les fonctionnalités et la stabilité.
-
-## 📄 Licence
-
-Projet interne pour l'intégration ArcGIS-Salesforce.
+Pour toute question ou problème, contactez l'équipe de développement.
 
 ---
 
+*Dernière mise à jour : Décembre 2024*  
 *Développé avec Salesforce DX et ArcGIS Maps SDK* 🗺️✨

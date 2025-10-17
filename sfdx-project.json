@@ -8,5 +8,19 @@
   "name": "esriMap",
   "namespace": "",
   "sfdcLoginUrl": "https://login.salesforce.com",
-  "sourceApiVersion": "64.0"
+  "sourceApiVersion": "64.0",
+  "orgs": {
+    "esrimapddev": {
+      "username": "jerome155@agentforce.com",
+      "description": "Principal Sandbox - esriMap development"
+    },
+    "sjsrtestcarte": {
+      "username": "sjsr-testcarte_info@municipal-ia.tech",
+      "description": "Client Sandbox - SJSR testing"
+    },
+    "esritestscratch": {
+      "username": "test-rhonrzchbq9b@example.com",
+      "description": "Temporary Scratch Org - Testing"
+    }
+  }
 }
