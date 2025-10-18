@@ -11,6 +11,7 @@ Un composant Salesforce Lightning Web Component (LWC) qui intègre des cartes ES
 - **🔗 Liaison automatique** : Les zones sont automatiquement liées au Case/Account/etc via champ lookup
 - **⚙️ Configuration dynamique** : Activation/désactivation des outils via Custom Settings
 - **🎨 Interface Lightning** : Composant LWC respectant les standards Salesforce
+- **🌐 Support Communities** : Compatible avec Salesforce Communities (domaines `.my.site.com`)
 
 ## 🏗️ Architecture Technique
 
@@ -29,19 +30,22 @@ Un composant Salesforce Lightning Web Component (LWC) qui intègre des cartes ES
 
 ### **Orgs Principales**
 ```
-EsriMapDev        → Sandbox de développement principal
+esriMap           → Org de développement principal (par défaut) 🍁
 SJSR-TESTCARTE    → Sandbox client pour tests
-esriTestScratch    → Scratch org temporaire (30j)
+esriMapNew        → Scratch org temporaire (30j)
+esriTestScratch   → Scratch org temporaire (30j)
+EsriMapDev        → Ancienne org de dev (problèmes de migration data center)
 ```
 
 ### **Déploiement sur une Org**
 ```bash
-# Déployer sur l'org par défaut
+# Déployer sur l'org par défaut (esriMap)
 sf project deploy start
 
 # Déployer sur une org spécifique
-sf project deploy start --target-org EsriMapDev
+sf project deploy start --target-org esriMap
 sf project deploy start --target-org SJSR-TESTCARTE
+sf project deploy start --target-org esriMapNew
 sf project deploy start --target-org esriTestScratch
 ```
 
@@ -133,7 +137,18 @@ MapAreaService.SaveResult result = MapAreaService.saveMapAreas(
 
 Pour toute question ou problème, contactez l'équipe de développement.
 
+## 🔄 Changelog
+
+### **v1.1.0 - Janvier 2025**
+- ✅ **Support Salesforce Communities** : Ajout du support des domaines `.my.site.com`
+- ✅ **Changement d'org par défaut** : Migration de EsriMapDev vers esriMap
+- ✅ **Correction bouton "Enregistrer"** : Résolution du problème de bouton grisé dans les Communities
+- ✅ **Déploiements réussis** : Validation sur 3 orgs (esriMap, SJSR-TESTCARTE, esriMapNew)
+
+### **v1.0.0 - Décembre 2024**
+- 🎉 **Version initiale** : Composant LWC avec intégration ArcGIS complète
+
 ---
 
-*Dernière mise à jour : Décembre 2024*  
+*Dernière mise à jour : Janvier 2025*  
 *Développé avec Salesforce DX et ArcGIS Maps SDK* 🗺️✨

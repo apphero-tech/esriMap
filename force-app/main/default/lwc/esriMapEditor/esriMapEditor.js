@@ -181,7 +181,8 @@ export default class EsriMapEditor extends NavigationMixin(LightningElement) {
         // STANDARD SALESFORCE: Accepter les messages des domaines Visualforce et Lightning
         const isSalesforceDomain = event.origin.includes('force.com') || 
                                   event.origin.includes('salesforce.com') ||
-                                  event.origin.includes('vf.force.com');
+                                  event.origin.includes('vf.force.com') ||
+                                  event.origin.includes('.my.site.com');
         
         if (!isSalesforceDomain) {
             console.log('⚠️ Domaine non autorisé, message ignoré:', event.origin);

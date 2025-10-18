@@ -525,9 +525,9 @@
 
                 // Créer et configurer le widget Locate (géolocalisation native ArcGIS)
                 const locateWidget = new Locate({
-                            view: view,
+                    view: view,
                     label: "Ma position",
-                    useHeadingEnabled: true,
+                    useHeadingEnabled: false,
                     goToOverride: function(view, options) {
                         // Personnaliser le comportement de navigation vers la position
                         view.goTo({
@@ -1106,19 +1106,46 @@
                     return shapeInfo;
                 }
 
-                // Gestion simple des erreurs de géolocalisation
+                // Gestion détaillée des erreurs de géolocalisation
                 locateWidget.on("locate-error", function(event) {
-                    console.warn('⚠️ Erreur de géolocalisation:', event.error);
+                    console.error('🚨 ERREUR GÉOLOCALISATION DÉTAILLÉE:', {
+                        error: event.error,
+                        code: event.error.code,
+                        message: event.error.message,
+                        timestamp: new Date().toISOString(),
+                        userAgent: navigator.userAgent,
+                        isSecureContext: window.isSecureContext,
+                        protocol: window.location.protocol,
+                        hostname: window.location.hostname
+                    });
                     
                     if (event.error.code === 1) {
-                        // Permission refusée
-                        console.warn('❌ Permission de géolocalisation refusée par l\'utilisateur');
+                        console.error('❌ Permission de géolocalisation refusée par l\'utilisateur');
+                        console.error('💡 Solution: Autoriser la géolocalisation dans les paramètres du navigateur');
                     } else if (event.error.code === 2) {
-                        // Position indisponible
-                        console.warn('❌ Position indisponible');
+                        console.error('❌ Position indisponible (GPS désactivé ou signal faible)');
+                        console.error('💡 Solution: Activer le GPS et s\'assurer d\'avoir un signal');
                     } else if (event.error.code === 3) {
-                        // Timeout
-                        console.warn('⏰ Timeout de géolocalisation');
+                        console.error('⏰ Timeout de géolocalisation');
+                        console.error('💡 Solution: Réessayer dans quelques secondes');
+                    } else {
+                        console.error('❓ Erreur de géolocalisation inconnue:', event.error);
+                    }
+                    
+                    // Test direct de l'API géolocalisation pour diagnostic
+                    console.log('🔍 Test direct de l\'API géolocalisation...');
+                    if (navigator.geolocation) {
+                        navigator.geolocation.getCurrentPosition(
+                            function(position) {
+                                console.log('✅ Test direct réussi:', position);
+                            },
+                            function(error) {
+                                console.error('❌ Test direct échoué:', error);
+                            },
+                            { timeout: 5000 }
+                        );
+                    } else {
+                        console.error('❌ navigator.geolocation non disponible');
                     }
                 });
 
@@ -1129,18 +1156,16 @@
 
                 // Ajouter les widgets SEULEMENT si mode édition (pas lecture seule)
                 if (!window.isReadOnlyMode) {
-                    // Ajouter le widget Locate à la vue
-                    view.ui.add(locateWidget, "bottom-left");
-
                     // Ajouter les widgets à la vue selon les conventions ArcGIS
                     // Search reste en haut à gauche
                     view.ui.add(searchWidget, { position: "top-left", index: 0 });
                     // Déplacer Zoom et Locate en bas à gauche (Zoom au-dessus)
                     try { view.ui.move("zoom", { position: "bottom-left", index: 0 }); } catch (e) { try { view.ui.move("zoom", "bottom-left"); } catch (ignore) {} }
+                    // Ajouter le widget Locate UNE SEULE FOIS
                     view.ui.add(locateWidget, { position: "bottom-left", index: 1 });
                     view.ui.add(compassWidget, "top-right");   // Compass (navigation)
                     view.ui.add(basemapToggleWidget, "top-right"); // BasemapToggle (changement de fond)
-                    view.ui.add(sketchWidget, "bottom-right"); // Sketch (outils de dessin)
+                    // Note: sketchWidget sera ajouté automatiquement dans createAndActivateSketchWidget()
                 } else {
                     // En lecture seule, s'assurer que le contrôleur Zoom est visible en bas à droite
                     try { view.ui.move("zoom", "bottom-right"); } catch (e) {}
