@@ -1,9 +1,44 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Package xmlns="http://soap.sforce.com/2006/04/metadata">
     <types>
-        <members>esriMapSelector</members>
-        <members>esriMapRecord</members>
+        <members>esriMapEditor</members>
+        <members>esriMapViewer</members>
         <name>LightningComponentBundle</name>
+    </types>
+    <types>
+        <members>ArcGISMap</members>
+        <name>ApexPage</name>
+    </types>
+    <types>
+        <members>MapAreaService</members>
+        <name>ApexClass</name>
+    </types>
+    <types>
+        <members>Map_Area__c</members>
+        <name>CustomObject</name>
+    </types>
+    <types>
+        <members>ArcGIS_Tool_Settings__c</members>
+        <name>CustomObject</name>
+    </types>
+    <types>
+        <members>esriMap_Admin</members>
+        <members>esriMap_External</members>
+        <members>esriMap_Internal</members>
+        <name>PermissionSet</name>
+    </types>
+    <types>
+        <members>ArcGIS_Maps_SDK</members>
+        <members>ArcGIS_World_Geocoding</members>
+        <name>RemoteSiteSetting</name>
+    </types>
+    <types>
+        <members>ArcGIS_CSS_433</members>
+        <name>StaticResource</name>
+    </types>
+    <types>
+        <members>Map_Area__c</members>
+        <name>CustomTab</name>
     </types>
     <version>64.0</version>
 </Package>

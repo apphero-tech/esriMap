@@ -8,6 +8,10 @@ export default class EsriMapViewer extends LightningElement {
     isLoading = true;
     hasGeometry = false;
     
+    // ✅ NOUVELLES PROPRIÉTÉS POUR GESTION CORRECTE DU LISTENER
+    _boundMessageHandler = null;
+    _isInitialized = false;
+    
     // Récupérer l'ID de l'enregistrement depuis le contexte de la page
     get currentRecordId() {
         return this.recordId || this.getRecordIdFromContext();
@@ -26,14 +30,40 @@ export default class EsriMapViewer extends LightningElement {
         return this.hasGeometry ? 'Localisation sur la carte' : 'Aucune géométrie disponible';
     }
     
+    // ✅ ATTACHER LE LISTENER UNE SEULE FOIS AU CONNEXION
+    connectedCallback() {
+        console.log('🔌 Connexion du composant esriMapViewer');
+        
+        // ✅ Sauvegarder la référence bound pour pouvoir la retirer plus tard
+        this._boundMessageHandler = this.handleMessageFromVF.bind(this);
+        window.addEventListener('message', this._boundMessageHandler);
+        
+        console.log('📌 Listener de messages attaché');
+    }
+    
     renderedCallback() {
-        // Écouter les messages de la page Visualforce
-        window.addEventListener('message', this.handleMessageFromVF.bind(this));
+        // ✅ UNIQUEMENT initialiser l'iframe si pas encore fait
+        if (this._isInitialized) {
+            return;
+        }
+        this._isInitialized = true;
         
         if (this.currentRecordId) {
-            // Ne pas charger immédiatement, attendre que l'iframe soit prête
             console.log('🗺️ Composant rendu, recordId:', this.currentRecordId);
         }
+    }
+    
+    // ✅ NETTOYER LE LISTENER LORS DE LA DÉCONNEXION
+    disconnectedCallback() {
+        console.log('🧹 Nettoyage du composant esriMapViewer');
+        
+        if (this._boundMessageHandler) {
+            window.removeEventListener('message', this._boundMessageHandler);
+            console.log('✅ Listener de messages supprimé');
+            this._boundMessageHandler = null;
+        }
+        
+        this._isInitialized = false;
     }
     
     // Gérer les messages reçus de Visualforce

@@ -105,11 +105,18 @@ public with sharing class MapAreaService {
         
         try {
             // Valider que le champ existe et qu'il est une relation
-            Schema.DescribeFieldResult fieldDescribe = Map_Area__c.sObjectType.getDescribe()
-                .fields.getMap().get(relationshipFieldName).getDescribe();
+            Schema.SObjectType mapAreaType = Map_Area__c.sObjectType;
+            Map<String, Schema.SObjectField> fieldMap = mapAreaType.getDescribe().fields.getMap();
             
-            if (fieldDescribe == null || fieldDescribe.getType() != Schema.DisplayType.REFERENCE) {
-                System.debug('⚠️ Le champ ' + relationshipFieldName + ' n\'existe pas ou n\'est pas une relation');
+            if (!fieldMap.containsKey(relationshipFieldName)) {
+                System.debug('❌ Le champ ' + relationshipFieldName + ' n\'existe pas sur Map_Area__c');
+                return result;
+            }
+            
+            Schema.DescribeFieldResult fieldDescribe = fieldMap.get(relationshipFieldName).getDescribe();
+            
+            if (fieldDescribe.getType() != Schema.DisplayType.REFERENCE) {
+                System.debug('❌ Le champ ' + relationshipFieldName + ' n\'est pas une relation');
                 return result;
             }
             
@@ -124,7 +131,6 @@ public with sharing class MapAreaService {
             
         } catch (Exception e) {
             System.debug('❌ Erreur getMapAreasByRelationship: ' + e.getMessage());
-            // Retourner une map vide au lieu de lancer une exception pour ne pas bloquer le composant
         }
         
         return result;

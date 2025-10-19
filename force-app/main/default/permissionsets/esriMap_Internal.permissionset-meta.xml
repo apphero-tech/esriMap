@@ -29,10 +29,14 @@
         <readable>true</readable>
     </fieldPermissions>
     <fieldPermissions>
-        <editable>false</editable>
+        <editable>true</editable>
         <field>Map_Area__c.Address__c</field>
         <readable>true</readable>
     </fieldPermissions>
     
-
+    <tabSettings>
+        <tab>Map_Area__c</tab>
+        <visibility>Visible</visibility>
+    </tabSettings>
+    
 </PermissionSet>

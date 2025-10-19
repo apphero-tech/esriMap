@@ -34,5 +34,9 @@
         <readable>true</readable>
     </fieldPermissions>
     
-
+    <tabSettings>
+        <tab>Map_Area__c</tab>
+        <visibility>Visible</visibility>
+    </tabSettings>
+    
 </PermissionSet>

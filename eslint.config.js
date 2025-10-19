@@ -4,6 +4,13 @@ export default [
         languageOptions: {
             ecmaVersion: 'latest',
             sourceType: 'module',
+            parserOptions: {
+                ecmaVersion: 'latest',
+                sourceType: 'module',
+                ecmaFeatures: {
+                    decorators: true
+                }
+            },
             globals: {
                 console: 'readonly',
                 window: 'readonly',
@@ -12,10 +19,6 @@ export default [
                 module: 'readonly',
                 exports: 'readonly',
                 global: 'readonly'
-            },
-            parserOptions: {
-                ecmaVersion: 'latest',
-                sourceType: 'module'
             }
         },
         rules: {
