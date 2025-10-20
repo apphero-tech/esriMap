@@ -86,8 +86,6 @@
             <div class="records-table table-header-row">
                 <div class="table-header">Nom</div>
                 <div class="table-header">Adresse</div>
-                <div class="table-header desktop-only">Latitude</div>
-                <div class="table-header desktop-only">Longitude</div>
                 <div class="table-header">Type</div>
                 <div class="table-header desktop-only">Créé par</div>
                 <div class="table-header desktop-only">Date de création</div>
@@ -98,8 +96,6 @@
                 <div key={rec.id} class="records-table">
                     <div class="table-cell"><a href={rec.url} target="_blank">{rec.name}</a></div>
                     <div class="table-cell">{rec.address}</div>
-                    <div class="table-cell desktop-only">{rec.latitude}</div>
-                    <div class="table-cell desktop-only">{rec.longitude}</div>
                     <div class="table-cell"><span class="type-badge">{rec.type}</span></div>
                     <div class="table-cell desktop-only">{rec.createdByName}</div>
                     <div class="table-cell desktop-only">{rec.createdDate}</div>
