@@ -4,6 +4,8 @@ import { NavigationMixin } from 'lightning/navigation';
 import saveMapAreas from '@salesforce/apex/MapAreaService.saveMapAreas';
 import getMapAreasByIds from '@salesforce/apex/MapAreaService.getMapAreasByIds';
 import getMapAreasByRelationship from '@salesforce/apex/MapAreaService.getMapAreasByRelationship';
+import deleteMapArea from '@salesforce/apex/MapAreaService.deleteMapArea';
+import deleteMapAreas from '@salesforce/apex/MapAreaService.deleteMapAreas';
 
 let listenerCount = 0;
 
@@ -24,6 +26,7 @@ export default class EsriMapEditor extends NavigationMixin(LightningElement) {
     coordinates = { latitude: 0, longitude: 0 };
     _isSaveButtonDisabled = true;
     isSaving = false;
+    isDeleting = false;
     @track createdRecords = [];
     
     // ✅ NOUVELLES PROPRIÉTÉS POUR LIFECYCLE MANAGEMENT
@@ -510,6 +513,93 @@ export default class EsriMapEditor extends NavigationMixin(LightningElement) {
         }
         if (!geometryData || !areaType) return;
         this.sendMessageToVF({ type: 'DISPLAY_SAVED_SHAPE', geometryData, areaType, autoCenter: true });
+    }
+
+    /**
+     * Supprimer une forme individuelle
+     */
+    async handleDeleteOne(event) {
+        const recordId = event.currentTarget.dataset.id;
+        const rec = this.createdRecords.find(r => r.id === recordId);
+        
+        if (!rec) return;
+        
+        // Demander confirmation
+        const confirmed = await this.showConfirmationDialog(
+            'Supprimer',
+            `Êtes-vous sûr de vouloir supprimer "${rec.name}" ?`
+        );
+        
+        if (!confirmed) return;
+        
+        this.isDeleting = true;
+        try {
+            const result = await deleteMapArea({ recordId: recordId });
+            
+            if (result.success) {
+                // Retirer de la liste localement
+                this.createdRecords = this.createdRecords.filter(r => r.id !== recordId);
+                this.showToast('Succès', `"${rec.name}" a été supprimé avec succès`, 'success');
+            } else {
+                this.showToast('Erreur', result.message || 'Erreur lors de la suppression', 'error');
+            }
+        } catch (error) {
+            console.error('Erreur suppression individuelle:', error);
+            this.showToast('Erreur', error.body?.message || 'Erreur lors de la suppression', 'error');
+        } finally {
+            this.isDeleting = false;
+        }
+    }
+
+    /**
+     * Supprimer tous les enregistrements créés
+     */
+    async handleDeleteAll() {
+        const count = this.createdRecords.length;
+        
+        if (count === 0) {
+            this.showToast('Info', 'Aucun enregistrement à supprimer', 'info');
+            return;
+        }
+        
+        // Demander confirmation
+        const confirmed = await this.showConfirmationDialog(
+            'Supprimer tous les enregistrements',
+            `Êtes-vous sûr de vouloir supprimer ${count} enregistrement${count > 1 ? 's' : ''} ? Cette action est irréversible.`
+        );
+        
+        if (!confirmed) return;
+        
+        this.isDeleting = true;
+        try {
+            const recordIds = this.createdRecords.map(r => r.id);
+            const result = await deleteMapAreas({ recordIds: recordIds });
+            
+            if (result.success) {
+                // Vider la liste localement
+                this.createdRecords = [];
+                this.showToast('Succès', `${result.deletedCount} enregistrement${result.deletedCount > 1 ? 's' : ''} supprimé${result.deletedCount > 1 ? 's' : ''} avec succès`, 'success');
+            } else {
+                this.showToast('Erreur', result.message || 'Erreur lors de la suppression', 'error');
+            }
+        } catch (error) {
+            console.error('Erreur suppression en masse:', error);
+            this.showToast('Erreur', error.body?.message || 'Erreur lors de la suppression', 'error');
+        } finally {
+            this.isDeleting = false;
+        }
+    }
+
+    /**
+     * Afficher un dialog de confirmation simple
+     */
+    showConfirmationDialog(title, message) {
+        return new Promise((resolve) => {
+            // Utiliser un confirmdialog natif du navigateur pour la simplicité
+            // En production, vous pourriez utiliser un composant LWC plus sophistiqué
+            const result = confirm(`${title}\n\n${message}`);
+            resolve(result);
+        });
     }
 
     // Afficher un toast

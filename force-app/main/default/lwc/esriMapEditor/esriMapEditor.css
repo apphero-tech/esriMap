@@ -205,3 +205,34 @@
 .records-card lightning-datatable {
     width: 100%;
 }
+
+/* Section header avec flex layout pour titre + bouton */
+.section-header-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+}
+
+.section-header-content > div {
+    flex: 1;
+}
+
+/* Bouton Supprimer tous */
+.btn-delete-all {
+    margin-left: var(--lwc-spacingSmall, 0.5rem);
+}
+
+/* Bouton de suppression individuelle dans la table */
+.btn-delete-individual {
+    margin-left: var(--lwc-spacingXSmall, 0.25rem);
+    vertical-align: middle;
+}
+
+/* Actions cell flex layout */
+.table-cell:last-child {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    white-space: normal;
+}

@@ -354,4 +354,79 @@ public with sharing class MapAreaService {
         
         return true;
     }
+    
+    /**
+     * Supprimer un enregistrement Map_Area__c
+     * @param recordId - ID de l'enregistrement à supprimer
+     * @return Map avec success et message
+     */
+    @AuraEnabled
+    public static Map<String, Object> deleteMapArea(Id recordId) {
+        Map<String, Object> result = new Map<String, Object>();
+        
+        try {
+            if (recordId == null) {
+                result.put('success', false);
+                result.put('message', 'ID d\'enregistrement invalide');
+                return result;
+            }
+            
+            // Vérifier que l'enregistrement existe
+            Map_Area__c existingRecord = [SELECT Id FROM Map_Area__c WHERE Id = :recordId LIMIT 1];
+            
+            // Supprimer l'enregistrement
+            delete existingRecord;
+            
+            result.put('success', true);
+            result.put('message', 'Enregistrement supprimé avec succès');
+            result.put('deletedId', recordId);
+            
+            return result;
+        } catch (Exception e) {
+            result.put('success', false);
+            result.put('message', 'Erreur lors de la suppression : ' + e.getMessage());
+            return result;
+        }
+    }
+    
+    /**
+     * Supprimer plusieurs enregistrements Map_Area__c
+     * @param recordIds - Liste des IDs à supprimer
+     * @return Map avec success, message et nombre d'enregistrements supprimés
+     */
+    @AuraEnabled
+    public static Map<String, Object> deleteMapAreas(List<Id> recordIds) {
+        Map<String, Object> result = new Map<String, Object>();
+        
+        try {
+            if (recordIds == null || recordIds.isEmpty()) {
+                result.put('success', false);
+                result.put('message', 'Aucun enregistrement à supprimer');
+                return result;
+            }
+            
+            // Récupérer les enregistrements à supprimer
+            List<Map_Area__c> recordsToDelete = [SELECT Id FROM Map_Area__c WHERE Id IN :recordIds];
+            
+            if (recordsToDelete.isEmpty()) {
+                result.put('success', false);
+                result.put('message', 'Aucun enregistrement trouvé');
+                return result;
+            }
+            
+            // Supprimer les enregistrements
+            delete recordsToDelete;
+            
+            result.put('success', true);
+            result.put('message', 'Enregistrements supprimés avec succès');
+            result.put('deletedCount', recordsToDelete.size());
+            result.put('deletedIds', recordIds);
+            
+            return result;
+        } catch (Exception e) {
+            result.put('success', false);
+            result.put('message', 'Erreur lors de la suppression : ' + e.getMessage());
+            return result;
+        }
+    }
 }

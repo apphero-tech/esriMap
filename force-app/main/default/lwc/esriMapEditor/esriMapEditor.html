@@ -58,12 +58,28 @@
                     <lightning-spinner alternative-text="Chargement des zones liées..."></lightning-spinner>
                 </template>
                 <template if:false={isLoadingRelated}>
-                    <template if:true={readOnly}>
-                        Enregistrements liés
-                    </template>
-                    <template if:false={readOnly}>
-                        Enregistrements créés
-                    </template>
+                    <div class="section-header-content">
+                        <div>
+                            <template if:true={readOnly}>
+                                Enregistrements liés
+                            </template>
+                            <template if:false={readOnly}>
+                                Enregistrements créés
+                            </template>
+                        </div>
+                        <template if:false={readOnly}>
+                            <template if:true={hasCreatedRecords}>
+                                <lightning-button 
+                                    variant="destructive" 
+                                    label="Supprimer tous"
+                                    title="Supprimer tous les enregistrements"
+                                    disabled={isDeleting}
+                                    onclick={handleDeleteAll}
+                                    class="btn-delete-all">
+                                </lightning-button>
+                            </template>
+                        </template>
+                    </div>
                 </template>
             </div>
             <!-- En-têtes -->
@@ -88,7 +104,18 @@
                     <div class="table-cell desktop-only">{rec.createdByName}</div>
                     <div class="table-cell desktop-only">{rec.createdDate}</div>
                     <div class="table-cell">
-                        <button class="table-action-button" data-id={rec.id} onclick={handleViewOnMap}>Voir sur la carte</button>
+                        <button class="table-action-button" data-id={rec.id} onclick={handleViewOnMap} title="Voir sur la carte">Voir sur la carte</button>
+                        <template if:false={readOnly}>
+                            <lightning-button-icon 
+                                icon-name="utility:delete" 
+                                alternative-text="Supprimer"
+                                title="Supprimer cet enregistrement"
+                                class="btn-delete-individual"
+                                disabled={isDeleting}
+                                data-id={rec.id}
+                                onclick={handleDeleteOne}>
+                            </lightning-button-icon>
+                        </template>
                     </div>
                 </div>
             </template>
