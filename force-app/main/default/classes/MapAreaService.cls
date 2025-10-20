@@ -371,11 +371,18 @@ public with sharing class MapAreaService {
                 return result;
             }
             
+            // Récupérer l'enregistrement en tant que liste
+            List<Map_Area__c> recordsToDelete = [SELECT Id FROM Map_Area__c WHERE Id = :recordId LIMIT 1];
+            
             // Vérifier que l'enregistrement existe
-            Map_Area__c existingRecord = [SELECT Id FROM Map_Area__c WHERE Id = :recordId LIMIT 1];
+            if (recordsToDelete.isEmpty()) {
+                result.put('success', false);
+                result.put('message', 'Enregistrement introuvable ou déjà supprimé');
+                return result;
+            }
             
             // Supprimer l'enregistrement
-            delete existingRecord;
+            delete recordsToDelete[0];
             
             result.put('success', true);
             result.put('message', 'Enregistrement supprimé avec succès');
