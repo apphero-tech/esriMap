@@ -155,7 +155,7 @@ export default class EsriMapEditor extends NavigationMixin(LightningElement) {
             // JavaScript reçoit: Object { id1: {record}, id2: {record}, ... }
             const recordsArray = relatedRecords ? Object.values(relatedRecords) : [];
             
-            this.createdRecords = recordsArray.map(record => ({
+            const mappedRecords = recordsArray.map(record => ({
                 id: record.Id,
                 name: record.Name,
                 address: record.Address__c,
@@ -164,8 +164,12 @@ export default class EsriMapEditor extends NavigationMixin(LightningElement) {
                 type: record.Area_Type__c,
                 createdByName: record.CreatedBy?.Name || 'N/A',
                 createdDate: this.formatDate(record.CreatedDate),
+                createdDateRaw: record.CreatedDate, // Stocker la date brute pour le tri
                 url: '/' + record.Id
             }));
+
+            // ✅ Trier par date de création (plus récent en premier)
+            this.createdRecords = this.sortByCreatedDateDesc(mappedRecords);
 
             this.isLoadingRelated = false;
         } catch (error) {
@@ -173,6 +177,17 @@ export default class EsriMapEditor extends NavigationMixin(LightningElement) {
             this.errorMessage = 'Erreur lors du chargement des zones liées';
             this.isLoadingRelated = false;
         }
+    }
+
+    /**
+     * Trier les records par date de création (plus récent en premier)
+     */
+    sortByCreatedDateDesc(records) {
+        return records.sort((a, b) => {
+            const dateA = new Date(a.createdDateRaw || 0);
+            const dateB = new Date(b.createdDateRaw || 0);
+            return dateB - dateA; // Ordre décroissant (plus récent en premier)
+        });
     }
 
     // Initialiser l'iframe
@@ -405,6 +420,7 @@ export default class EsriMapEditor extends NavigationMixin(LightningElement) {
                         attributes: { recordId: id, actionName: 'view' }
                     });
                     const s = summaries && summaries[id] ? summaries[id] : null;
+                    const createdDateRaw = s && s.CreatedDate ? s.CreatedDate : null;
                     newItems.push({
                         id,
                         url,
@@ -414,11 +430,13 @@ export default class EsriMapEditor extends NavigationMixin(LightningElement) {
                         longitude: s && s.Longitude__c ? s.Longitude__c : null,
                         type: s && s.Area_Type__c ? s.Area_Type__c : (payload[0].areaType || ''),
                         createdByName: s && s.CreatedBy ? s.CreatedBy.Name : '',
-                        createdDate: s && s.CreatedDate ? s.CreatedDate : null,
+                        createdDate: createdDateRaw ? this.formatDate(createdDateRaw) : '',
+                        createdDateRaw: createdDateRaw, // Stocker la date brute pour le tri
                         geoJson: s && s.Geometry_JSON__c ? s.Geometry_JSON__c : (payload[0].geoJson || '')
                     });
                 }
                 this.createdRecords = [...newItems, ...this.createdRecords];
+                this.createdRecords = this.sortByCreatedDateDesc(this.createdRecords); // Trier après ajout
 
                 this.isSaving = false;
                 this._isSaveButtonDisabled = true;
