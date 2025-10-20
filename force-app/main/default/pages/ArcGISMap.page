@@ -519,15 +519,8 @@
                 const locateWidget = new Locate({
                     view: view,
                     label: "Ma position",
-                    useHeadingEnabled: false,
-                    goToOverride: function(view, options) {
-                        // Personnaliser le comportement de navigation vers la position
-                        view.goTo({
-                            target: options.target,
-                            zoom: 18, // Zoom plus proche pour la position utilisateur
-                            duration: 1000
-                        });
-                    }
+                    useHeadingEnabled: false
+                    // ✅ TEST: Retirer temporairement goToOverride pour isoler le problème
                 });
 
                 // Créer et configurer le widget BasemapToggle (changement de fond de carte)
@@ -1080,34 +1073,56 @@
                     
                     if (event.error.code === 1) {
                         console.error('❌ Permission de géolocalisation refusée par l\'utilisateur');
-                        console.error('💡 Solution: Autoriser la géolocalisation dans les paramètres du navigateur');
+                        console.warn('💡 Solution: Vérifier les permissions du navigateur');
+                        console.warn('   - Chrome/Edge: Clic sur l\'icône cadenas > Géolocalisation > Autoriser');
+                        console.warn('   - Firefox: Outils > Options > Vie privée > Permissions > Géolocalisation');
+                        console.warn('   - Safari: Réglages > Confidentialité > Services de localisation');
+                        
+                        // ✅ TENTATIVE DE RÉINITIALISATION DES PERMISSIONS
+                        // Suggérer à l'utilisateur de recharger la page après avoir changé les permissions
+                        console.warn('⚠️ Après avoir autorisé, veuillez recharger la page');
                     } else if (event.error.code === 2) {
                         console.error('❌ Position indisponible (GPS désactivé ou signal faible)');
-                        console.error('💡 Solution: Activer le GPS et s\'assurer d\'avoir un signal');
+                        console.warn('💡 Solution: Vérifier que le GPS est activé sur votre appareil');
+                        console.warn('   - Desktop: Impossible d\'obtenir la position sans GPS/réseau');
+                        console.warn('   - Mobile: Activer le GPS ou utiliser le WiFi');
                     } else if (event.error.code === 3) {
-                        console.error('⏰ Timeout de géolocalisation');
-                        console.error('💡 Solution: Réessayer dans quelques secondes');
+                        console.error('⏰ Timeout de géolocalisation (délai dépassé)');
+                        console.warn('💡 Solution: Réessayer dans quelques secondes');
+                        console.warn('   - Vérifier la connexion réseau');
+                        console.warn('   - Vérifier que le GPS a un signal');
                     } else {
-                        console.error('❓ Erreur de géolocalisation inconnue:', event.error);
+                        console.error('❓ Erreur de géolocalisation inconnue:', event.error.message);
                     }
                     
-                    // Test direct de l'API géolocalisation pour diagnostic
+                    // ✅ Test direct de l'API géolocalisation pour diagnostic
+                    console.warn('🔍 TEST DIAGNOSTIC DE NAVIGATOR.GEOLOCATION:');
                     if (navigator.geolocation) {
                         navigator.geolocation.getCurrentPosition(
                             function(position) {
+                                console.log('✅ Navigator.geolocation fonctionne:', {
+                                    latitude: position.coords.latitude,
+                                    longitude: position.coords.longitude,
+                                    accuracy: position.coords.accuracy
+                                });
                             },
                             function(error) {
-                                console.error('❌ Test direct échoué:', error);
+                                console.error('❌ Test direct échoué avec code:', error.code, 'Message:', error.message);
                             },
                             { timeout: 5000 }
                         );
                     } else {
-                        console.error('❌ navigator.geolocation non disponible');
+                        console.error('❌ navigator.geolocation non disponible dans ce navigateur');
                     }
                 });
 
                 // Gérer le succès de géolocalisation
                 locateWidget.on("locate", function(event) {
+                    console.log('✅ Géolocalisation réussie:', {
+                        latitude: event.position.coords.latitude,
+                        longitude: event.position.coords.longitude,
+                        accuracy: event.position.coords.accuracy + ' mètres'
+                    });
                 });
 
                 // Ajouter les widgets SEULEMENT si mode édition (pas lecture seule)
