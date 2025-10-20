@@ -42,6 +42,18 @@ Ajouter le composant `esriMapEditor` sur une Record Page avec les propriétés :
 - **ArcGIS** : Maps SDK for JavaScript
 - **Standards** : GeoJSON, WGS84
 
+## 🔧 Correctifs Récents
+
+### ✅ Géolocalisation dans iframe (Oct 2025)
+**Problème** : Le widget Locate d'ArcGIS ne demandait pas la permission de géolocalisation dans les iframes.
+
+**Solution** :
+1. Ajout de l'attribut `allow="geolocation *"` aux iframes
+2. Ajout de `allow-modals` au sandbox pour permettre les pop-ups de permission
+3. Retrait du `goToOverride` qui interférait avec le widget natif
+
+**Impact** : La géolocalisation fonctionne maintenant correctement dans Firefox, Chrome et Safari.
+
 ---
 
-*Dernière mise à jour : Janvier 2025*
+*Dernière mise à jour : Octobre 2025*
