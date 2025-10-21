@@ -15,6 +15,11 @@ export default class EsriMapEditor extends NavigationMixin(LightningElement) {
     @api title;                             // Titre personnalisé
     @api readOnly = false;                  // Mode lecture seule
     
+    // ✅ PROPRIÉTÉS @api POUR LES OUTPUTS FLOW
+    @api lastSavedShapeId = null;           // ID du dernier enregistrement sauvegardé
+    @api lastSavedShapeData = null;         // Données du dernier enregistrement
+    @api allSavedRecordIds = [];            // IDs de tous les enregistrements créés
+    
     // Legacy properties - kept for backward compatibility but not exposed in meta.xml for CRM
     @api champRelation;
     @api idParent;
@@ -68,6 +73,32 @@ export default class EsriMapEditor extends NavigationMixin(LightningElement) {
 
     get showRelatedZonesSection() {
         return !this.readOnly && this.relationshipFieldName;
+    }
+
+    // ✅ MÉTHODES FLOW BUILDER - Appelées quand le Flow valide l'écran
+    /**
+     * Méthode appelée par Salesforce Flow pour valider l'écran
+     * Retourne un objet avec les données à passer aux étapes suivantes
+     */
+    @api
+    validate() {
+        // Logger pour debug
+        console.log('🔄 Flow validation - lastSavedShapeId:', this.lastSavedShapeId, 'allSavedRecordIds:', this.allSavedRecordIds);
+        
+        return {
+            isValid: true,
+            lastSavedShapeId: this.lastSavedShapeId,
+            lastSavedShapeData: this.lastSavedShapeData,
+            allSavedRecordIds: this.allSavedRecordIds
+        };
+    }
+
+    /**
+     * Getter pour les actions disponibles dans le Flow
+     * Retourne les actions que le composant peut déclencher
+     */
+    get availableActions() {
+        return ['FINISH', 'NEXT'];
     }
 
     connectedCallback() {
@@ -440,6 +471,17 @@ export default class EsriMapEditor extends NavigationMixin(LightningElement) {
                 }
                 this.createdRecords = [...newItems, ...this.createdRecords];
                 this.createdRecords = this.sortByCreatedDateDesc(this.createdRecords); // Trier après ajout
+
+                // ✅ METTRE À JOUR LES PROPRIÉTÉS FLOW POUR EXPORT
+                if (result.recordIds && result.recordIds.length > 0) {
+                    this.lastSavedShapeId = result.recordIds[0];
+                    this.lastSavedShapeData = newItems[0]; // Premier item est le plus récent
+                    this.allSavedRecordIds = this.createdRecords.map(r => r.id);
+                    console.log('✅ Données Flow mises à jour:', { 
+                        lastSavedShapeId: this.lastSavedShapeId, 
+                        allSavedRecordIds: this.allSavedRecordIds.length + ' enregistrements'
+                    });
+                }
 
                 this.isSaving = false;
                 this._isSaveButtonDisabled = true;
