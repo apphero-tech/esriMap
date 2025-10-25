@@ -40,5 +40,18 @@
         <members>Map_Area__c</members>
         <name>CustomTab</name>
     </types>
+    <types>
+        <members>Map_Area__c-Map Area Layout</members>
+        <name>Layout</name>
+    </types>
+    <types>
+        <members>Map_Area_Compact_Layout</members>
+        <name>CompactLayout</name>
+    </types>
+    <types>
+        <members>Map_Area__c.All</members>
+        <members>Map_Area__c.Recently_Viewed</members>
+        <name>ListView</name>
+    </types>
     <version>64.0</version>
 </Package>
