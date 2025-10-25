@@ -458,7 +458,25 @@
                     }
                 });
                 
-                // ========================================
+
+                // Essai simple de centrage sur géolocalisation si disponible
+                if (navigator.geolocation) {
+                    setTimeout(function() {
+                        navigator.geolocation.getCurrentPosition(
+                            function(position) {
+                                var userCoords = [position.coords.longitude, position.coords.latitude];
+                                console.log('✅ Position utilisateur:', userCoords);
+                                view.goTo({ center: userCoords, zoom: 15 }, { duration: 1000 });
+                            },
+                            function(error) {
+                                console.log('📌 Géolocalisation refusée, reste sur Montréal');
+                            },
+                            { timeout: 5000, maximumAge: 300000 }
+                        );
+                    }, 500);
+                }
+                
+                                // ========================================
                 // ÉCOUTEUR DE MESSAGES POUR MODE LECTURE SEULE
                 // ========================================
                 

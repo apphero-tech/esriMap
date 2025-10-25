@@ -14,6 +14,7 @@
             <property name="relationshipFieldName" type="String" label="Nom du champ de relation" description="Nom API du champ lookup sur Map_Area__c (ex: Case__c, Account__c) - Optionnel si pas de liaison"/>
             <property name="title" type="String" label="Titre" description="Titre personnalisé du composant - Optionnel"/>
             <property name="readOnly" type="Boolean" default="false" description="Mode lecture seule pour affichage des zones"/>
+            <!-- Propriété conservée temporairement pour compatibilité avec les Flows existants -->
         </targetConfig>
         <targetConfig targets="lightning__FlowScreen">
             <property name="recordId" type="String" label="ID de l'enregistrement parent" description="ID de l'enregistrement (Case, Account, etc.) auquel lier les zones - Requis pour la sauvegarde"/>
@@ -21,6 +22,7 @@
             <property name="title" type="String" label="Titre" description="Titre personnalisé du composant - Optionnel"/>
             <property name="initialZoom" type="Integer" label="Zoom initial" description="Niveau de zoom initial (1-28, par défaut 12)"/>
             <property name="readOnly" type="Boolean" default="false" description="Mode lecture seule"/>
+            <!-- Propriété conservée temporairement pour compatibilité avec les Flows existants -->
             <!-- ✅ OUTPUTS FLOW - Propriétés que le composant expose pour le Flow -->
             <property name="lastSavedShapeId" type="String" label="ID du dernier enregistrement" description="ID du dernier enregistrement Map_Area__c sauvegardé - Sortie pour utilisation dans les étapes suivantes"/>
             <property name="lastSavedShapeData" type="String" label="Données du dernier enregistrement" description="Objet JSON contenant toutes les données du dernier enregistrement - Sortie pour utilisation dans les étapes suivantes"/>

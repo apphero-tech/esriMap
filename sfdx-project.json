@@ -1,26 +1,27 @@
 {
   "packageDirectories": [
     {
+      "versionName": "ver 0.1",
+      "versionNumber": "0.1.0.NEXT",
       "path": "force-app",
-      "default": true
+      "default": true,
+      "package": "esriMap",
+      "versionDescription": "ArcGIS Map Component for Salesforce - Interactive mapping with drawing tools, geocoding, and automatic parent linking"
     }
   ],
   "name": "esriMap",
   "namespace": "",
   "sfdcLoginUrl": "https://login.salesforce.com",
   "sourceApiVersion": "64.0",
-  "orgs": {
-    "esrimapddev": {
-      "username": "jerome155@agentforce.com",
-      "description": "Principal Sandbox - esriMap development"
-    },
-    "sjsrtestcarte": {
-      "username": "sjsr-testcarte_info@municipal-ia.tech",
-      "description": "Client Sandbox - SJSR testing"
-    },
-    "esritestscratch": {
-      "username": "test-rhonrzchbq9b@example.com",
-      "description": "Temporary Scratch Org - Testing"
-    }
+  "packageAliases": {
+    "esriMap": "0HoOj00000002BVKAY",
+    "esriMap@0.1.0-1": "04tOj000001Wv4DIAS",
+    "esriMap@0.1.0-2": "04tOj000001Wv7RIAS",
+    "esriMap@0.1.0-3": "04tOj000001Wv93IAC",
+    "esriMap@0.1.0-4": "04tOj000001WvAfIAK",
+    "esriMap@0.1.0-5": "04tOj000001WvCHIA0",
+    "esriMap@0.1.0-6": "04tOj000001WvDtIAK",
+    "esriMap@0.1.0-7": "04tOj000001WvH7IAK",
+    "esriMap@0.1.0-8": "04tOj000001WvIjIAK"
   }
 }

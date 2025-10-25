@@ -316,7 +316,7 @@ export default class EsriMapEditor extends NavigationMixin(LightningElement) {
                     data: {
                         recordId: this.recordId,
                         relationshipFieldName: this.relationshipFieldName,
-                        readOnly: this.readOnly
+                        readOnly: this.readOnly,
                     }
                 });
                 break;
