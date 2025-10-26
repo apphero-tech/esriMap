@@ -6,6 +6,7 @@ import getMapAreasByIds from '@salesforce/apex/MapAreaService.getMapAreasByIds';
 import getMapAreasByRelationship from '@salesforce/apex/MapAreaService.getMapAreasByRelationship';
 import deleteMapArea from '@salesforce/apex/MapAreaService.deleteMapArea';
 import deleteMapAreas from '@salesforce/apex/MapAreaService.deleteMapAreas';
+import syncShapeToParent from '@salesforce/apex/MapAreaService.syncShapeToParent';
 
 let listenerCount = 0;
 
@@ -590,6 +591,43 @@ export default class EsriMapEditor extends NavigationMixin(LightningElement) {
             this.showToast('Erreur', error.body?.message || 'Erreur lors de la suppression', 'error');
         } finally {
             this.isDeleting = false;
+        }
+    }
+
+    /**
+     * Synchroniser les coordonnées d'une forme vers l'objet parent
+     */
+    async handleSynchronize(event) {
+        const recordId = event.currentTarget.dataset.id;
+        const rec = this.createdRecords.find(r => r.id === recordId);
+        
+        if (!rec) return;
+        
+        // Vérifier que nous avons le contexte parent
+        if (!this.recordId || !this.relationshipFieldName) {
+            this.showToast('Erreur', 'Contexte parent manquant pour la synchronisation', 'error');
+            return;
+        }
+        
+        try {
+            const result = await syncShapeToParent({
+                mapAreaId: recordId,
+                parentRecordId: this.recordId,
+                relationshipFieldName: this.relationshipFieldName
+            });
+            
+            if (result.success) {
+                this.showToast(
+                    'Succès', 
+                    `Coordonnées de "${rec.name}" synchronisées avec succès`,
+                    'success'
+                );
+            } else {
+                this.showToast('Erreur', result.message || 'Erreur lors de la synchronisation', 'error');
+            }
+        } catch (error) {
+            console.error('Erreur synchronisation:', error);
+            this.showToast('Erreur', error.body?.message || 'Erreur lors de la synchronisation', 'error');
         }
     }
 

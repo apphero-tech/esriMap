@@ -436,4 +436,156 @@ public with sharing class MapAreaService {
             return result;
         }
     }
+
+    /**
+     * Synchroniser les coordonnées d'une Map_Area__c vers le champ Geolocation du parent
+     * @param mapAreaId - ID de la Map_Area__c à synchroniser
+     * @param parentRecordId - ID de l'enregistrement parent (Case, Opportunity, etc.)
+     * @param relationshipFieldName - Nom API du champ lookup sur Map_Area__c
+     * @return Map avec success, message et détails
+     */
+    @AuraEnabled
+    public static Map<String, Object> syncShapeToParent(
+        Id mapAreaId, 
+        Id parentRecordId, 
+        String relationshipFieldName
+    ) {
+        Map<String, Object> result = new Map<String, Object>();
+        
+        try {
+            // Valider les paramètres
+            if (mapAreaId == null || parentRecordId == null || String.isBlank(relationshipFieldName)) {
+                result.put('success', false);
+                result.put('message', 'Paramètres manquants pour la synchronisation');
+                return result;
+            }
+            
+            // Récupérer les données de la Map_Area__c
+            Map_Area__c mapArea = [
+                SELECT Id, Latitude__c, Longitude__c, Address__c
+                FROM Map_Area__c 
+                WHERE Id = :mapAreaId 
+                LIMIT 1
+            ];
+            
+            if (mapArea == null) {
+                result.put('success', false);
+                result.put('message', 'Zone de carte introuvable');
+                return result;
+            }
+            
+            // Vérifier que la zone est bien liée au parent
+            Object linkedParentId = mapArea.get(relationshipFieldName);
+            if (linkedParentId == null || linkedParentId.toString() != parentRecordId.toString()) {
+                result.put('success', false);
+                result.put('message', 'Cette zone n\'est pas liée à cet enregistrement parent');
+                return result;
+            }
+            
+            // Déterminer le type du parent à partir de l'ID
+            String parentSObjectType = getParentObjectType(parentRecordId);
+            
+            if (String.isBlank(parentSObjectType)) {
+                result.put('success', false);
+                result.put('message', 'Type d\'objet parent non supporté');
+                return result;
+            }
+            
+            // Vérifier que le champ Geolocation existe sur le parent
+            Schema.SObjectType parentType = Schema.getGlobalDescribe().get(parentSObjectType);
+            if (parentType == null) {
+                result.put('success', false);
+                result.put('message', 'Objet parent non trouvé');
+                return result;
+            }
+            
+            Map<String, Schema.SObjectField> parentFields = parentType.getDescribe().fields.getMap();
+            
+            // Déterminer le champ Geolocation (Location__c par convention)
+            String geolocationFieldName = 'Location__c';
+            
+            if (!parentFields.containsKey(geolocationFieldName)) {
+                result.put('success', false);
+                result.put('message', 'Le champ Geolocation (' + geolocationFieldName + ') n\'existe pas sur ' + parentSObjectType + '. Veuillez contacter votre administrateur pour le créer.');
+                result.put('fieldName', geolocationFieldName);
+                result.put('objectType', parentSObjectType);
+                return result;
+            }
+            
+            // Vérifier les permissions CRUD et FLS
+            if (!Schema.sObjectType.get(parentSObjectType).isUpdateable()) {
+                result.put('success', false);
+                result.put('message', 'Permissions insuffisantes pour mettre à jour ' + parentSObjectType);
+                return result;
+            }
+            
+            Schema.DescribeFieldResult geoFieldDescribe = parentFields.get(geolocationFieldName).getDescribe();
+            if (!geoFieldDescribe.isUpdateable()) {
+                result.put('success', false);
+                result.put('message', 'Permissions insuffisantes sur le champ Geolocation');
+                return result;
+            }
+            
+            // Construire l'objet à mettre à jour dynamiquement
+            SObject parentRecord = parentType.newSObject(parentRecordId);
+            
+            // Mettre à jour le champ Geolocation avec latitude et longitude
+            if (mapArea.Latitude__c != null && mapArea.Longitude__c != null) {
+                parentRecord.put(
+                    geolocationFieldName, 
+                    new Location(mapArea.Latitude__c, mapArea.Longitude__c)
+                );
+            }
+            
+            // Mettre à jour l'adresse si le parent a un champ Address__c et si l'adresse est disponible
+            if (parentFields.containsKey('Address__c') && String.isNotBlank(mapArea.Address__c)) {
+                Schema.DescribeFieldResult addressFieldDescribe = parentFields.get('Address__c').getDescribe();
+                if (addressFieldDescribe.isUpdateable()) {
+                    parentRecord.put('Address__c', mapArea.Address__c.left(255));
+                }
+            }
+            
+            // Mettre à jour le parent
+            update parentRecord;
+            
+            result.put('success', true);
+            result.put('message', 'Coordonnées synchronisées avec succès vers ' + parentSObjectType);
+            result.put('latitude', mapArea.Latitude__c);
+            result.put('longitude', mapArea.Longitude__c);
+            result.put('address', mapArea.Address__c);
+            
+            return result;
+            
+        } catch (QueryException qe) {
+            result.put('success', false);
+            result.put('message', 'Enregistrement non trouvé : ' + qe.getMessage());
+            System.debug('❌ QueryException en syncShapeToParent: ' + qe.getMessage());
+            return result;
+        } catch (DmlException de) {
+            result.put('success', false);
+            result.put('message', 'Erreur lors de la mise à jour : ' + de.getMessage());
+            System.debug('❌ DmlException en syncShapeToParent: ' + de.getMessage());
+            return result;
+        } catch (Exception e) {
+            result.put('success', false);
+            result.put('message', 'Erreur inattendue : ' + e.getMessage());
+            System.debug('❌ Exception en syncShapeToParent: ' + e.getMessage());
+            System.debug('Stack trace: ' + e.getStackTraceString());
+            return result;
+        }
+    }
+    
+    /**
+     * Déterminer le type d'objet SObject à partir d'un ID
+     * @param recordId - ID du record
+     * @return Nom API du type d'objet
+     */
+    private static String getParentObjectType(Id recordId) {
+        if (recordId == null) {
+            return null;
+        }
+        
+        String sObjectType = recordId.getSObjectType().getDescribe().getName();
+        return sObjectType;
+    }
 }

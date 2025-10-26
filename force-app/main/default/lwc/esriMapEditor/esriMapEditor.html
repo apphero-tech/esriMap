@@ -102,6 +102,7 @@
                     <div class="table-cell">
                         <button class="table-action-button" data-id={rec.id} onclick={handleViewOnMap} title="Voir sur la carte">Voir sur la carte</button>
                         <template if:false={readOnly}>
+                            <button class="table-action-button sync-button" data-id={rec.id} onclick={handleSynchronize} title="Synchroniser les coordonnées vers l'objet parent">Synchroniser</button>
                             <lightning-button-icon 
                                 icon-name="utility:delete" 
                                 alternative-text="Supprimer"
