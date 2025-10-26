@@ -5,6 +5,7 @@
     <externalId>false</externalId>
     <label>esriMap - Géolocalisation</label>
     <required>false</required>
+    <scale>5</scale>
     <trackTrending>false</trackTrending>
     <type>Location</type>
 </CustomField>
