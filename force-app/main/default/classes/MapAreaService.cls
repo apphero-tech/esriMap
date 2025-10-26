@@ -507,6 +507,7 @@ public with sharing class MapAreaService {
                 result.put('message', 'Le champ Geolocation (' + geolocationFieldName + ') n\'existe pas sur ' + parentSObjectType + '. Veuillez contacter votre administrateur pour le créer.');
                 result.put('fieldName', geolocationFieldName);
                 result.put('objectType', parentSObjectType);
+                System.debug('❌ Champ ' + geolocationFieldName + ' introuvable sur ' + parentSObjectType);
                 return result;
             }
             
@@ -514,14 +515,34 @@ public with sharing class MapAreaService {
             Schema.DescribeSObjectResult describeResult = parentType.getDescribe();
             if (!describeResult.isUpdateable()) {
                 result.put('success', false);
-                result.put('message', 'Permissions insuffisantes pour mettre à jour ' + parentSObjectType);
+                result.put('message', 'Permissions insuffisantes pour mettre à jour ' + parentSObjectType + '. Votre utilisateur n\'a pas accès en écriture à cet objet.');
+                System.debug('❌ Pas de permissions UPDATE sur ' + parentSObjectType);
                 return result;
             }
             
             Schema.DescribeFieldResult geoFieldDescribe = parentFields.get(geolocationFieldName).getDescribe();
+            
+            // Diagnostiquer les problèmes FLS avec plus de détails
             if (!geoFieldDescribe.isUpdateable()) {
+                String errorMsg = 'Permissions insuffisantes sur le champ Geolocation (' + geolocationFieldName + '). ';
+                
+                // Vérifier si le champ est au moins lisible
+                if (!geoFieldDescribe.isAccessible()) {
+                    errorMsg += 'Le champ n\'est pas accessible en lecture. Vérifiez la Field Level Security (FLS) du champ ' + geolocationFieldName + ' sur l\'objet ' + parentSObjectType + '.';
+                } else {
+                    errorMsg += 'Le champ est lisible mais pas modifiable. Vérifiez que la FLS permet l\'écriture sur le champ ' + geolocationFieldName + '.';
+                }
+                
                 result.put('success', false);
-                result.put('message', 'Permissions insuffisantes sur le champ Geolocation');
+                result.put('message', errorMsg);
+                result.put('fieldName', geolocationFieldName);
+                result.put('objectType', parentSObjectType);
+                result.put('fieldAccessible', geoFieldDescribe.isAccessible());
+                result.put('fieldUpdateable', geoFieldDescribe.isUpdateable());
+                
+                System.debug('❌ ' + errorMsg);
+                System.debug('📋 Détails FLS - Field: ' + geolocationFieldName + ', Accessible: ' + geoFieldDescribe.isAccessible() + ', Updateable: ' + geoFieldDescribe.isUpdateable());
+                
                 return result;
             }
             
