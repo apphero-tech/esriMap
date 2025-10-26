@@ -461,12 +461,10 @@ public with sharing class MapAreaService {
             }
             
             // Récupérer les données de la Map_Area__c
-            Map_Area__c mapArea = [
-                SELECT Id, Latitude__c, Longitude__c, Address__c
-                FROM Map_Area__c 
-                WHERE Id = :mapAreaId 
-                LIMIT 1
-            ];
+            // IMPORTANT: Inclure dynamiquement le champ de relation dans la query
+            String query = 'SELECT Id, Latitude__c, Longitude__c, Address__c, ' + relationshipFieldName +
+                          ' FROM Map_Area__c WHERE Id = :mapAreaId LIMIT 1';
+            Map_Area__c mapArea = Database.query(query);
             
             if (mapArea == null) {
                 result.put('success', false);
@@ -513,7 +511,8 @@ public with sharing class MapAreaService {
             }
             
             // Vérifier les permissions CRUD et FLS
-            if (!Schema.sObjectType.get(parentSObjectType).isUpdateable()) {
+            Schema.DescribeSObjectResult describeResult = parentType.getDescribe();
+            if (!describeResult.isUpdateable()) {
                 result.put('success', false);
                 result.put('message', 'Permissions insuffisantes pour mettre à jour ' + parentSObjectType);
                 return result;
@@ -531,10 +530,11 @@ public with sharing class MapAreaService {
             
             // Mettre à jour le champ Geolocation avec latitude et longitude
             if (mapArea.Latitude__c != null && mapArea.Longitude__c != null) {
-                parentRecord.put(
-                    geolocationFieldName, 
-                    new Location(mapArea.Latitude__c, mapArea.Longitude__c)
-                );
+                // Utiliser un Map pour créer le Geolocation field
+                Map<String, Decimal> geoLocation = new Map<String, Decimal>();
+                geoLocation.put('latitude', mapArea.Latitude__c);
+                geoLocation.put('longitude', mapArea.Longitude__c);
+                parentRecord.put(geolocationFieldName, geoLocation);
             }
             
             // Mettre à jour l'adresse si le parent a un champ Address__c et si l'adresse est disponible
