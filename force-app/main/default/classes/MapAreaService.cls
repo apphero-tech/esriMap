@@ -550,12 +550,23 @@ public with sharing class MapAreaService {
             SObject parentRecord = parentType.newSObject(parentRecordId);
             
             // Mettre à jour le champ Geolocation avec latitude et longitude
+            // Note: Les champs Geolocation doivent être mis à jour via put() avec un Object générique
             if (mapArea.Latitude__c != null && mapArea.Longitude__c != null) {
-                // Utiliser un Map pour créer le Geolocation field
-                Map<String, Decimal> geoLocation = new Map<String, Decimal>();
+                // Créer un Object contenant les coordonnées pour le champ Geolocation
+                Map<String, Object> geoLocation = new Map<String, Object>();
                 geoLocation.put('latitude', mapArea.Latitude__c);
                 geoLocation.put('longitude', mapArea.Longitude__c);
-                parentRecord.put(geolocationFieldName, geoLocation);
+                
+                try {
+                    parentRecord.put(geolocationFieldName, (Object) geoLocation);
+                    System.debug('✅ Geolocation field updated successfully for ' + geolocationFieldName);
+                } catch (Exception e) {
+                    System.debug('⚠️ Failed to update Geolocation field: ' + e.getMessage());
+                    // Vérifier si c'est un problème d'accessibilité
+                    result.put('success', false);
+                    result.put('message', 'Impossible de mettre à jour le champ Geolocation: ' + e.getMessage());
+                    return result;
+                }
             }
             
             // Mettre à jour l'adresse si le parent a un champ esriMap_Address__c et si l'adresse est disponible
