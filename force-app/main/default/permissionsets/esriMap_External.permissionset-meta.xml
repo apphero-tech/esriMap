@@ -12,6 +12,15 @@
         <object>Map_Area__c</object>
         <viewAllRecords>false</viewAllRecords>
     </objectPermissions>
+    <objectPermissions>
+        <allowCreate>false</allowCreate>
+        <allowDelete>false</allowDelete>
+        <allowEdit>false</allowEdit>
+        <allowRead>true</allowRead>
+        <modifyAllRecords>false</modifyAllRecords>
+        <object>Case</object>
+        <viewAllRecords>false</viewAllRecords>
+    </objectPermissions>
 
     <fieldPermissions>
         <editable>true</editable>
@@ -31,6 +40,16 @@
     <fieldPermissions>
         <editable>true</editable>
         <field>Map_Area__c.Address__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>false</editable>
+        <field>Case.esriMap_Location__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>false</editable>
+        <field>Case.esriMap_Address__c</field>
         <readable>true</readable>
     </fieldPermissions>
     

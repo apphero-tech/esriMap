@@ -499,8 +499,8 @@ public with sharing class MapAreaService {
             
             Map<String, Schema.SObjectField> parentFields = parentType.getDescribe().fields.getMap();
             
-            // Déterminer le champ Geolocation (Location__c par convention)
-            String geolocationFieldName = 'Location__c';
+            // Déterminer le champ Geolocation (esriMap_Location__c par convention)
+            String geolocationFieldName = 'esriMap_Location__c';
             
             if (!parentFields.containsKey(geolocationFieldName)) {
                 result.put('success', false);
@@ -558,11 +558,12 @@ public with sharing class MapAreaService {
                 parentRecord.put(geolocationFieldName, geoLocation);
             }
             
-            // Mettre à jour l'adresse si le parent a un champ Address__c et si l'adresse est disponible
-            if (parentFields.containsKey('Address__c') && String.isNotBlank(mapArea.Address__c)) {
-                Schema.DescribeFieldResult addressFieldDescribe = parentFields.get('Address__c').getDescribe();
+            // Mettre à jour l'adresse si le parent a un champ esriMap_Address__c et si l'adresse est disponible
+            String addressFieldName = 'esriMap_Address__c';
+            if (parentFields.containsKey(addressFieldName) && String.isNotBlank(mapArea.Address__c)) {
+                Schema.DescribeFieldResult addressFieldDescribe = parentFields.get(addressFieldName).getDescribe();
                 if (addressFieldDescribe.isUpdateable()) {
-                    parentRecord.put('Address__c', mapArea.Address__c.left(255));
+                    parentRecord.put(addressFieldName, mapArea.Address__c.left(255));
                 }
             }
             
