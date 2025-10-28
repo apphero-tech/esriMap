@@ -8,8 +8,6 @@ import deleteMapArea from '@salesforce/apex/MapAreaService.deleteMapArea';
 import deleteMapAreas from '@salesforce/apex/MapAreaService.deleteMapAreas';
 import syncShapeToParent from '@salesforce/apex/MapAreaService.syncShapeToParent';
 
-let listenerCount = 0;
-
 export default class EsriMapEditor extends NavigationMixin(LightningElement) {
     @api recordId;                          // ID du Case/Account/etc
     @api relationshipFieldName;             // Nom du champ lookup (ex: Case__c)
@@ -21,13 +19,6 @@ export default class EsriMapEditor extends NavigationMixin(LightningElement) {
     @api lastSavedShapeData = null;         // Données du dernier enregistrement
     @api allSavedRecordIds = [];            // IDs de tous les enregistrements créés
     
-    // Legacy properties - kept for backward compatibility but not exposed in meta.xml for CRM
-    @api champRelation;
-    @api idParent;
-    @api autoCenter = false;
-    @api showControls = false;
-    @api initialZoom = 12;
-    
     isMapInitialized = false;
     coordinates = { latitude: 0, longitude: 0 };
     _isSaveButtonDisabled = true;
@@ -35,15 +26,14 @@ export default class EsriMapEditor extends NavigationMixin(LightningElement) {
     isDeleting = false;
     @track createdRecords = [];
     
-    // ✅ NOUVELLES PROPRIÉTÉS POUR LIFECYCLE MANAGEMENT
+    // Lifecycle management properties
     _previousRecordId = null;
     _boundMessageHandler = null;
     _resizeBound = false;
-    _messageProcessingLock = false;     // Protection contra race conditions simples
+    _messageProcessingLock = false;     // Protection contre les race conditions simples
     _lastMessageId = null;              // ID du dernier message pour détection basique
     _vfPageUrl = null;                  // Cache de l'URL VF pour éviter les recharges inutiles
     
-    _columns = [];
     isLoadingRelated = false;
     errorMessage = '';
     
@@ -120,7 +110,6 @@ export default class EsriMapEditor extends NavigationMixin(LightningElement) {
         // Créer une nouvelle référence stable à la fonction
         this._boundMessageHandler = this.handleMessageFromVF.bind(this);
         window.addEventListener('message', this._boundMessageHandler);
-        listenerCount++;
         
         // Charger les zones liées au record
         this.loadRelatedRecords();
@@ -130,7 +119,6 @@ export default class EsriMapEditor extends NavigationMixin(LightningElement) {
     disconnectedCallback() {
         if (this._boundMessageHandler) {
             window.removeEventListener('message', this._boundMessageHandler);
-            listenerCount--;
             this._boundMessageHandler = null;
         }
     }
@@ -200,7 +188,8 @@ export default class EsriMapEditor extends NavigationMixin(LightningElement) {
                 createdByName: record.CreatedBy?.Name || 'N/A',
                 createdDate: this.formatDate(record.CreatedDate),
                 createdDateRaw: record.CreatedDate, // Stocker la date brute pour le tri
-                url: '/' + record.Id
+                url: '/' + record.Id,
+                isSynchronized: record.Is_Synchronized__c
             }));
 
             // ✅ Trier par date de création (plus récent en premier)
@@ -251,9 +240,7 @@ export default class EsriMapEditor extends NavigationMixin(LightningElement) {
             saveShapeId: saveShapeId,
             data: {
                 recordId: this.recordId,
-                relationshipFieldName: this.relationshipFieldName,
-                champRelation: this.champRelation,
-                idParent: this.idParent
+                relationshipFieldName: this.relationshipFieldName
             }
         });
     }
@@ -467,7 +454,8 @@ export default class EsriMapEditor extends NavigationMixin(LightningElement) {
                         createdByName: s && s.CreatedBy ? s.CreatedBy.Name : '',
                         createdDate: createdDateRaw ? this.formatDate(createdDateRaw) : '',
                         createdDateRaw: createdDateRaw, // Stocker la date brute pour le tri
-                        geoJson: s && s.Geometry_JSON__c ? s.Geometry_JSON__c : (payload[0].geoJson || '')
+                        geoJson: s && s.Geometry_JSON__c ? s.Geometry_JSON__c : (payload[0].geoJson || ''),
+                        isSynchronized: s && s.Is_Synchronized__c ? s.Is_Synchronized__c : false
                     });
                 }
                 this.createdRecords = [...newItems, ...this.createdRecords];
@@ -617,6 +605,11 @@ export default class EsriMapEditor extends NavigationMixin(LightningElement) {
             });
             
             if (result.success) {
+                // Mettre à jour localement sans recharger
+                // Une seule forme peut être synchronisée à la fois
+                this.createdRecords.forEach(r => {
+                    r.isSynchronized = (r.id === recordId);
+                });
                 this.showToast(
                     'Succès', 
                     `Coordonnées de "${rec.name}" synchronisées avec succès`,
@@ -653,18 +646,24 @@ export default class EsriMapEditor extends NavigationMixin(LightningElement) {
         this.isDeleting = true;
         try {
             const recordIds = this.createdRecords.map(r => r.id);
-            const result = await deleteMapAreas({ recordIds: recordIds });
+            console.log('🗑️ handleDeleteAll - recordIds:', recordIds);
+            console.log('🗑️ Appel deleteMapAreas avec', recordIds.length, 'formes');
             
-            if (result.success) {
-                // Vider la liste localement
+            const result = await deleteMapAreas({ recordIds: recordIds });
+            console.log('🗑️ Résultat deleteMapAreas:', result);
+            
+            if (result && result.success) {
+                console.log('✅ Suppression réussie, vidage liste locale');
+                // Vider la liste localement - les formes disparaissent immédiatement
                 this.createdRecords = [];
                 this.showToast('Succès', `${result.deletedCount} enregistrement${result.deletedCount > 1 ? 's' : ''} supprimé${result.deletedCount > 1 ? 's' : ''} avec succès`, 'success');
             } else {
-                this.showToast('Erreur', result.message || 'Erreur lors de la suppression', 'error');
+                console.log('❌ Suppression échouée:', result);
+                this.showToast('Erreur', (result && result.message) || 'Erreur lors de la suppression', 'error');
             }
         } catch (error) {
-            console.error('Erreur suppression en masse:', error);
-            this.showToast('Erreur', error.body?.message || 'Erreur lors de la suppression', 'error');
+            console.error('❌ Exception suppression en masse:', error);
+            this.showToast('Erreur', (error && error.body && error.body.message) || 'Erreur lors de la suppression', 'error');
         } finally {
             this.isDeleting = false;
         }
@@ -694,16 +693,7 @@ export default class EsriMapEditor extends NavigationMixin(LightningElement) {
     
     // Lightning-datatable columns config
     get columns() {
-        return [
-            { label: 'Nom', fieldName: 'url', type: 'url', initialWidth: 120, typeAttributes: { label: { fieldName: 'name' }, target: '_blank' } },
-            { label: 'Adresse', fieldName: 'address', type: 'text', wrapText: true, initialWidth: 250 },
-            { label: 'Latitude', fieldName: 'latitude', type: 'number', initialWidth: 100, cellAttributes: { alignment: 'left' }, typeAttributes: { minimumFractionDigits: 6, maximumFractionDigits: 6 } },
-            { label: 'Longitude', fieldName: 'longitude', type: 'number', initialWidth: 100, cellAttributes: { alignment: 'left' }, typeAttributes: { minimumFractionDigits: 6, maximumFractionDigits: 6 } },
-            { label: 'Type', fieldName: 'type', type: 'text', initialWidth: 80 },
-            { label: 'Créé par', fieldName: 'createdByName', type: 'text', initialWidth: 120 },
-            { label: 'Date', fieldName: 'createdDate', type: 'date-local', initialWidth: 140, typeAttributes: { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' } },
-            { type: 'action', typeAttributes: { rowActions: [ { label: 'Voir sur la carte', name: 'view_on_map' } ] }, initialWidth: 90 }
-        ];
+        return this.buildColumns(window.innerWidth);
     }
 
     get tableRows() {
@@ -715,23 +705,13 @@ export default class EsriMapEditor extends NavigationMixin(LightningElement) {
             const container = this.template.querySelector('.enregistrements-container') || this.template.querySelector('.slds-card__body');
             if (!container) return;
             const available = container.clientWidth || 1000;
-            const nextCols = this.buildColumns(available);
-            // Compare shallowly by initialWidth and labels to avoid infinite re-renders
-            const prev = this._columns;
-            const changed = !prev || prev.length !== nextCols.length || prev.some((c, i) => {
-                const n = nextCols[i];
-                return c.initialWidth !== n.initialWidth || c.label !== n.label || c.fieldName !== n.fieldName;
-            });
-            if (changed) {
-                this._columns = nextCols;
-            }
+            // No need to store columns in _columns, just recompute on demand
         } catch (e) {
             // ignore
         }
     }
 
     buildColumns(containerWidth) {
-        // Largeurs fixes des colonnes compactes (px)
         const widthName = 140;
         const widthLat = 130;
         const widthLong = 130;
@@ -739,8 +719,8 @@ export default class EsriMapEditor extends NavigationMixin(LightningElement) {
         const widthCreatedBy = 130;
         const widthCreatedDate = 130;
         const widthAction = 160;
-        const widthRowNum = 56; // colonne numéros de ligne de lightning-datatable
-        const paddings = 48; // marge approximative
+        const widthRowNum = 56;
+        const paddings = 48;
         const sumFixed = widthRowNum + widthName + widthLat + widthLong + widthType + widthCreatedBy + widthCreatedDate + widthAction + paddings;
         const addressWidth = Math.max(320, containerWidth - sumFixed);
         return [
@@ -759,7 +739,6 @@ export default class EsriMapEditor extends NavigationMixin(LightningElement) {
         const actionName = event.detail.action.name;
         const row = event.detail.row;
         if (actionName === 'view_on_map') {
-            // Simuler le clic bouton précédent
             const fakeEvt = { currentTarget: { dataset: { id: row.id } } };
             this.handleViewOnMap(fakeEvt);
         }

@@ -1,11 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
-    <fullName>esriMap_Location__c</fullName>
-    <displayLocationInDecimal>false</displayLocationInDecimal>
+    <fullName>esriMap_Longitude__c</fullName>
     <externalId>false</externalId>
-    <label>esriMap - Géolocalisation</label>
+    <label>esriMap - Longitude</label>
+    <precision>18</precision>
     <required>false</required>
-    <scale>5</scale>
+    <scale>6</scale>
     <trackTrending>false</trackTrending>
-    <type>Location</type>
+    <type>Number</type>
+    <unique>false</unique>
 </CustomField>

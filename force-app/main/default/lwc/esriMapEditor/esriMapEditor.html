@@ -89,6 +89,7 @@
                 <div class="table-header">Type</div>
                 <div class="table-header desktop-only">Créé par</div>
                 <div class="table-header desktop-only">Date de création</div>
+                <div class="table-header">Synchronisée</div>
                 <div class="table-header">Actions</div>
             </div>
             <!-- Lignes -->
@@ -99,14 +100,38 @@
                     <div class="table-cell"><span class="type-badge">{rec.type}</span></div>
                     <div class="table-cell desktop-only">{rec.createdByName}</div>
                     <div class="table-cell desktop-only">{rec.createdDate}</div>
+                    <div class="table-cell sync-column">
+                        <template if:true={rec.isSynchronized}>
+                            <lightning-icon 
+                                icon-name="utility:check" 
+                                alternative-text="Synchronisée"
+                                title="Synchronisée"
+                                class="sync-indicator">
+                            </lightning-icon>
+                        </template>
+                    </div>
                     <div class="table-cell">
-                        <button class="table-action-button" data-id={rec.id} onclick={handleViewOnMap} title="Voir sur la carte">Voir sur la carte</button>
+                        <lightning-button-icon 
+                            icon-name="utility:preview" 
+                            alternative-text="Voir sur la carte"
+                            title="Voir"
+                            class="btn-action-icon"
+                            data-id={rec.id}
+                            onclick={handleViewOnMap}>
+                        </lightning-button-icon>
                         <template if:false={readOnly}>
-                            <button class="table-action-button sync-button" data-id={rec.id} onclick={handleSynchronize} title="Synchroniser les coordonnées vers l'objet parent">Synchroniser</button>
+                            <lightning-button-icon 
+                                icon-name="utility:sync" 
+                                alternative-text="Synchroniser"
+                                title="Synchroniser"
+                                class="btn-action-icon"
+                                data-id={rec.id}
+                                onclick={handleSynchronize}>
+                            </lightning-button-icon>
                             <lightning-button-icon 
                                 icon-name="utility:delete" 
                                 alternative-text="Supprimer"
-                                title="Supprimer cet enregistrement"
+                                title="Supprimer"
                                 class="btn-delete-individual"
                                 disabled={isDeleting}
                                 data-id={rec.id}
