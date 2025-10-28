@@ -116,11 +116,13 @@ public without sharing class MapAreaServiceDispatcher {
                     guestShapes.add(guestShape);
                 }
                 
-                return MapAreaServiceGuest.saveShapesForGuest(guestShapes, parentRecordId, relationshipFieldName);
+                MapAreaServiceGuest.SaveResult guestResult = MapAreaServiceGuest.saveShapesForGuest(guestShapes, parentRecordId, relationshipFieldName);
+                return convertGuestResult(guestResult);
             } else {
                 // ✅ Route to MapAreaService (with sharing)
                 System.debug('🔐 Routing to MapAreaService');
-                return MapAreaService.saveMapAreas(convertedShapes, parentRecordId, relationshipFieldName);
+                MapAreaService.SaveResult serviceResult = MapAreaService.saveMapAreas(convertedShapes, parentRecordId, relationshipFieldName);
+                return convertServiceResult(serviceResult);
             }
             
         } catch (Exception e) {
@@ -128,6 +130,58 @@ public without sharing class MapAreaServiceDispatcher {
             result.message = 'Erreur inattendue: ' + e.getMessage();
             System.debug('❌ Dispatcher error: ' + e.getMessage());
             System.debug('Stack trace: ' + e.getStackTraceString());
+        }
+        
+        return result;
+    }
+    
+    /**
+     * Convert MapAreaService.SaveResult to Dispatcher.SaveResult
+     */
+    private static SaveResult convertServiceResult(MapAreaService.SaveResult serviceResult) {
+        SaveResult result = new SaveResult();
+        result.success = serviceResult.success;
+        result.message = serviceResult.message;
+        result.recordIds = serviceResult.recordIds;
+        result.recordsCreated = serviceResult.recordsCreated;
+        result.errors = serviceResult.errors;
+        
+        // Convert error details
+        if (serviceResult.errorDetails != null) {
+            for (MapAreaService.ErrorDetail detail : serviceResult.errorDetails) {
+                result.errorDetails.add(new ErrorDetail(
+                    detail.message,
+                    detail.field,
+                    detail.errorType,
+                    detail.index
+                ));
+            }
+        }
+        
+        return result;
+    }
+    
+    /**
+     * Convert MapAreaServiceGuest.SaveResult to Dispatcher.SaveResult
+     */
+    private static SaveResult convertGuestResult(MapAreaServiceGuest.SaveResult guestResult) {
+        SaveResult result = new SaveResult();
+        result.success = guestResult.success;
+        result.message = guestResult.message;
+        result.recordIds = guestResult.recordIds;
+        result.recordsCreated = guestResult.recordsCreated;
+        result.errors = guestResult.errors;
+        
+        // Convert error details
+        if (guestResult.errorDetails != null) {
+            for (MapAreaServiceGuest.ErrorDetail detail : guestResult.errorDetails) {
+                result.errorDetails.add(new ErrorDetail(
+                    detail.message,
+                    detail.field,
+                    detail.errorType,
+                    detail.index
+                ));
+            }
         }
         
         return result;
