@@ -2,6 +2,7 @@ import { LightningElement, api, track, wire } from 'lwc';
 import { ShowToastEvent } from 'lightning/platformShowToastEvent';
 import { NavigationMixin } from 'lightning/navigation';
 import saveMapAreas from '@salesforce/apex/MapAreaService.saveMapAreas';
+import saveShapesForGuest from '@salesforce/apex/MapAreaServiceGuest.saveShapesForGuest';
 import getMapAreasByIds from '@salesforce/apex/MapAreaService.getMapAreasByIds';
 import getMapAreasByRelationship from '@salesforce/apex/MapAreaService.getMapAreasByRelationship';
 import deleteMapArea from '@salesforce/apex/MapAreaService.deleteMapArea';
@@ -420,12 +421,27 @@ export default class EsriMapEditor extends NavigationMixin(LightningElement) {
                 throw new Error(`Contexte perdu avant appel Apex: currentRecordId=${currentRecordId}, currentRelationshipField=${currentRelationshipField}`);
             }
             
+            // ✅ DÉTECTER SI C'EST UN GUEST USER ET APPELER LA BONNE MÉTHODE
+            let result;
+            const isGuestUser = document.body.className.includes('guest') || 
+                               (window.location.href && window.location.href.includes('site:'));
             
-            const result = await saveMapAreas({ 
-                shapesData: payload,
-                parentRecordId: currentRecordId,
-                relationshipFieldName: currentRelationshipField
-            });
+            if (isGuestUser) {
+                // Guest user → utiliser MapAreaServiceGuest (sans sharing)
+                console.log('🔓 Utilisateur guest détecté - utilisation de MapAreaServiceGuest');
+                result = await saveShapesForGuest({ 
+                    shapesData: payload,
+                    parentRecordId: currentRecordId,
+                    relationshipFieldName: currentRelationshipField
+                });
+            } else {
+                // Utilisateur normal → utiliser MapAreaService (with sharing)
+                result = await saveMapAreas({ 
+                    shapesData: payload,
+                    parentRecordId: currentRecordId,
+                    relationshipFieldName: currentRelationshipField
+                });
+            }
             
             if (result && result.success && result.recordIds && result.recordIds.length > 0) {
                 // Enrichir via Apex pour récupérer Name standard, adresse, coords, auteur et date
