@@ -1,6 +1,6 @@
 <?xml version='1.0' encoding='UTF-8'?>
 <ns0:PermissionSet xmlns:ns0="http://soap.sforce.com/2006/04/metadata">
-    <ns0:description>Permission Set pour l'application esriMap – Public : Internal. Stratégie : moindre privilège, accès nécessaire à esriMap + Map_Area__c en CRUD et FLS écriture sur tous les champs.</ns0:description>
+    <ns0:description>Permission Set pour l'application esriMap – Public : Internal. Stratégie : mêmes droits qu'Admin pour tous les utilisateurs internes.</ns0:description>
     <ns0:hasActivationRequired>false</ns0:hasActivationRequired>
     <ns0:label>esriMap – Internal</ns0:label>
     <ns0:objectPermissions>
@@ -8,22 +8,22 @@
         <ns0:allowDelete>true</ns0:allowDelete>
         <ns0:allowEdit>true</ns0:allowEdit>
         <ns0:allowRead>true</ns0:allowRead>
-        <ns0:modifyAllRecords>false</ns0:modifyAllRecords>
+        <ns0:modifyAllRecords>true</ns0:modifyAllRecords>
         <ns0:object>Map_Area__c</ns0:object>
-        <ns0:viewAllRecords>false</ns0:viewAllRecords>
+        <ns0:viewAllRecords>true</ns0:viewAllRecords>
     </ns0:objectPermissions>
     <ns0:fieldPermissions>
-        <ns0:editable>false</ns0:editable>
+        <ns0:editable>true</ns0:editable>
         <ns0:field>Map_Area__c.Geometry_JSON__c</ns0:field>
         <ns0:readable>true</ns0:readable>
     </ns0:fieldPermissions>
     <ns0:fieldPermissions>
-        <ns0:editable>false</ns0:editable>
+        <ns0:editable>true</ns0:editable>
         <ns0:field>Map_Area__c.Latitude__c</ns0:field>
         <ns0:readable>true</ns0:readable>
     </ns0:fieldPermissions>
     <ns0:fieldPermissions>
-        <ns0:editable>false</ns0:editable>
+        <ns0:editable>true</ns0:editable>
         <ns0:field>Map_Area__c.Longitude__c</ns0:field>
         <ns0:readable>true</ns0:readable>
     </ns0:fieldPermissions>
@@ -52,7 +52,7 @@
         <ns0:field>Case.esriMap_Address__c</ns0:field>
         <ns0:readable>true</ns0:readable>
     </ns0:fieldPermissions>
-    
+
     <ns0:tabSettings>
         <ns0:tab>Map_Area__c</ns0:tab>
         <ns0:visibility>Visible</ns0:visibility>
