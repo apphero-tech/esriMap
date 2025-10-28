@@ -56,15 +56,58 @@ Pour utiliser le bouton "Synchroniser" et remonter les coordonnées d'une zone v
 
 #### 📋 Ajouter les champs à la page layout du Case
 
-Après le déploiement, les champs existent mais ne s'affichent pas automatiquement. Vous devez les ajouter manuellement :
+Après le déploiement, les 3 champs existent dans votre org mais **ne s'affichent pas automatiquement** sur la Record Page du Case. Vous devez les ajouter manuellement au layout.
 
-1. Aller à **Setup → Object Manager → Case**
-2. Cliquer sur **Layouts**
-3. Ouvrir la page layout que vous utilisiez (ex: "Case Layout")
-4. Ajouter les 3 champs (`esriMap_Address__c`, `esriMap_Latitude__c`, `esriMap_Longitude__c`) dans une section visible
-5. Sauvegarder et rafraîchir
+##### ⚙️ Étapes pour ajouter les champs au layout :
 
-**Note** : Ces champs sont maintenant disponibles dans tous les profils via les Permission Sets esriMap (Admin, Internal, External).
+1. **Accéder à l'Object Manager**
+   - Aller à **Setup** (en haut à droite)
+   - Chercher **Object Manager** dans la barre de recherche
+   - Cliquer sur **Object Manager**
+
+2. **Sélectionner l'objet Case**
+   - Chercher et cliquer sur **Case**
+
+3. **Ouvrir les Layouts**
+   - Dans le menu à gauche, cliquer sur **Layouts**
+   - Vous verrez une liste de layouts (ex: "Case Layout", "Web to Case")
+
+4. **Éditer le layout que vous utilisez**
+   - Cliquer sur le layout que vous utilisez (généralement "Case Layout")
+   - Le layout editor s'ouvre
+
+5. **Ajouter les 3 champs esriMap**
+   - Sur la gauche, dans **Fields**, chercher les 3 champs :
+     - `esriMap_Address__c` (Adresse)
+     - `esriMap_Latitude__c` (Latitude)
+     - `esriMap_Longitude__c` (Longitude)
+   - Glisser-déposer chaque champ dans une section visible du layout
+   - **Recommandation** : Créer une nouvelle section "ESRI Map" ou les ajouter dans "Additional Information"
+
+6. **Sauvegarder le layout**
+   - Cliquer sur **Save** en haut à gauche
+   - Le message "Successfully saved" devrait apparaître
+
+7. **Rafraîchir la page**
+   - Rafraîchir votre navigateur (F5 ou Cmd+R)
+   - Ouvrir un enregistrement Case
+   - Les 3 champs devraient maintenant être visibles
+
+##### ✅ Vérification
+
+Une fois les champs ajoutés, vous devriez voir :
+- **esriMap - Adresse** : Champ texte vide (ou rempli après synchronisation)
+- **esriMap - Latitude** : Nombre (ex: 45.521235)
+- **esriMap - Longitude** : Nombre (ex: -122.675000)
+
+Ces valeurs se rempliront automatiquement quand vous utiliserez le bouton "Synchroniser" du composant esriMapEditor.
+
+##### 📝 Notes importantes
+
+- Ces champs sont **disponibles dans tous les profils** via les Permission Sets esriMap (Admin, Internal, External)
+- Vous n'avez **pas besoin** de configurer Field Level Security (FLS) - c'est déjà fait
+- Les champs restent **vides jusqu'à la première synchronisation** d'une zone depuis la carte
+- Si vous utilisez d'autres objets (Opportunity, Account, etc.), vous devez créer manuellement les 3 mêmes champs
 
 #### ✅ Bouton "Synchroniser"
 
