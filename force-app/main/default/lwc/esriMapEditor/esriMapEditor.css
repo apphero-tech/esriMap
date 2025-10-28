@@ -218,7 +218,7 @@
     flex: 1;
 }
 
-/* Bouton Supprimer tous */
+/* Bouton Supprimer */
 .btn-delete-all {
     margin-left: var(--lwc-spacingSmall, 0.5rem);
 }
