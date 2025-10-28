@@ -597,6 +597,14 @@ export default class EsriMapEditor extends NavigationMixin(LightningElement) {
             return;
         }
         
+        // ✅ Demander confirmation (identique à handleDeleteOne)
+        const confirmed = await this.showConfirmationDialog(
+            'Synchroniser',
+            `Êtes-vous sûr de vouloir synchroniser les coordonnées de "${rec.name}" vers l'enregistrement parent ?`
+        );
+        
+        if (!confirmed) return;
+        
         try {
             const result = await syncShapeToParent({
                 mapAreaId: recordId,
