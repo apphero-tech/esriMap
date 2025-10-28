@@ -30,7 +30,77 @@ sf project deploy start
 sf project deploy start --target-org esriMap
 ```
 
-## ⚙️ Configuration Requise
+## ✅ Post-Installation - Checklist
+
+Après le déploiement du package, suivez cette checklist pour activer complètement le composant :
+
+### 1️⃣ Vérifier le déploiement
+
+- [ ] Allez à **Setup → Installed Packages**
+- [ ] Vérifiez que "ESRI Map" apparaît dans la liste
+- [ ] Notez la version déployée
+
+### 2️⃣ Configurer les champs sur Case (ou votre objet parent)
+
+**Créer les 3 champs personnalisés :**
+
+- [ ] **esriMap_Latitude__c** (Number: 18,6)
+  - Setup → Object Manager → Case → Fields & Relationships → New
+  - Type: Number, Precision: 18, Scale: 6, Label: "esriMap - Latitude"
+
+- [ ] **esriMap_Longitude__c** (Number: 18,6)
+  - Même configuration que Latitude
+
+- [ ] **esriMap_Address__c** (Text: 255)
+  - Type: Text, Length: 255, Label: "esriMap - Adresse"
+
+💡 **Conseil** : Créez ces champs en même temps, puis ajoutez-les au layout (voir section Configuration)
+
+### 3️⃣ Ajouter les champs au layout Case
+
+- [ ] Setup → Object Manager → Case → Layouts
+- [ ] Ouvrir "Case Layout" (ou le layout que vous utilisez)
+- [ ] Glisser-déposer les 3 champs `esriMap_*` dans une section
+- [ ] Cliquer **Save**
+
+### 4️⃣ Configurer les permissions
+
+**Permission Sets sont déjà configurés :**
+- [ ] Admin : esriMap_Admin
+- [ ] Internal Users : esriMap_Internal
+- [ ] External Users : esriMap_External
+
+Assignez les Permission Sets aux utilisateurs qui doivent utiliser esriMap.
+
+### 5️⃣ Ajouter le composant à une Record Page
+
+- [ ] Aller à un enregistrement **Case** (ou votre objet parent)
+- [ ] Cliquer sur l'icône **⚙️ Edit Page**
+- [ ] Chercher le composant **esriMapEditor**
+- [ ] Glisser-déposer sur la page
+- [ ] Configure les propriétés :
+  - `recordId` : Laisser vide (auto-détecté)
+  - `relationshipFieldName` : `Case__c` (le lookup qui lie Map_Area__c)
+  - `readOnly` : false (pour édition) ou true (pour vue)
+- [ ] Cliquer **Save**
+
+### 6️⃣ Tester la fonctionnalité
+
+- [ ] Ouvrir un **Case**
+- [ ] Cliquer sur le **composant ESRI Map**
+- [ ] Dessiner une zone (Point, Polygon, etc.) sur la carte
+- [ ] Cliquer **Enregistrer**
+- [ ] La zone apparaît dans le tableau "Enregistrements créés"
+- [ ] Cliquer le bouton **Synchroniser** sur la zone
+- [ ] Vérifier que les champs `esriMap_Latitude__c`, `esriMap_Longitude__c`, `esriMap_Address__c` se remplissent
+
+### 7️⃣ Dépannage Cache (si les champs ne s'affichent pas)
+
+- [ ] Vider le cache du navigateur : **Ctrl+Shift+Delete** (Windows) ou **Cmd+Shift+Delete** (Mac)
+- [ ] Ou accéder via **Salesforce Classic** pour forcer l'actualisation du cache
+- [ ] Puis revenir à **Lightning Experience**
+
+### ⚙️ Configuration Requise
 
 ### Pour la Synchronisation manuelle vers Case
 
