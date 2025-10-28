@@ -15,6 +15,17 @@
         <ns0:viewAllRecords>false</ns0:viewAllRecords>
     </ns0:objectPermissions>
     
+    <!-- ✅ Lecture seule sur Map_Area__c (Apex "without sharing" s'en charge) -->
+    <ns0:objectPermissions>
+        <ns0:allowCreate>false</ns0:allowCreate>
+        <ns0:allowDelete>false</ns0:allowDelete>
+        <ns0:allowEdit>false</ns0:allowEdit>
+        <ns0:allowRead>true</ns0:allowRead>
+        <ns0:modifyAllRecords>false</ns0:modifyAllRecords>
+        <ns0:object>Map_Area__c</ns0:object>
+        <ns0:viewAllRecords>false</ns0:viewAllRecords>
+    </ns0:objectPermissions>
+    
     <!-- ✅ FLS sur Case (champs de localisation) -->
     <ns0:fieldPermissions>
         <ns0:editable>true</ns0:editable>
@@ -31,17 +42,6 @@
         <ns0:field>Case.esriMap_Address__c</ns0:field>
         <ns0:readable>true</ns0:readable>
     </ns0:fieldPermissions>
-    
-    <!-- ✅ Lecture seule sur Map_Area__c (Apex "without sharing" s'en charge) -->
-    <ns0:objectPermissions>
-        <ns0:allowCreate>false</ns0:allowCreate>
-        <ns0:allowDelete>false</ns0:allowDelete>
-        <ns0:allowEdit>false</ns0:allowEdit>
-        <ns0:allowRead>true</ns0:allowRead>
-        <ns0:modifyAllRecords>false</ns0:modifyAllRecords>
-        <ns0:object>Map_Area__c</ns0:object>
-        <ns0:viewAllRecords>false</ns0:viewAllRecords>
-    </ns0:objectPermissions>
     
     <!-- FLS sur Map_Area__c (tous les champs en readable only) -->
     <ns0:fieldPermissions>
