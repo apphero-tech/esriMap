@@ -86,14 +86,41 @@ public without sharing class MapAreaServiceDispatcher {
             
             System.debug('🔍 User type detected: ' + (isGuestUser ? 'GUEST' : 'INTERNAL'));
             
+            // Convert ShapeData to MapAreaService.ShapeData
+            List<MapAreaService.ShapeData> convertedShapes = new List<MapAreaService.ShapeData>();
+            for (ShapeData shape : shapesData) {
+                MapAreaService.ShapeData serviceShape = new MapAreaService.ShapeData();
+                serviceShape.name = shape.name;
+                serviceShape.areaType = shape.areaType;
+                serviceShape.geoJson = shape.geoJson;
+                serviceShape.latitude = shape.latitude;
+                serviceShape.longitude = shape.longitude;
+                serviceShape.address = shape.address;
+                convertedShapes.add(serviceShape);
+            }
+            
             if (isGuestUser) {
                 // ✅ Route to MapAreaServiceGuest (without sharing)
                 System.debug('🔓 Routing to MapAreaServiceGuest');
-                return MapAreaServiceGuest.saveShapesForGuest(shapesData, parentRecordId, relationshipFieldName);
+                
+                // Convert to MapAreaServiceGuest.ShapeData
+                List<MapAreaServiceGuest.ShapeData> guestShapes = new List<MapAreaServiceGuest.ShapeData>();
+                for (MapAreaService.ShapeData serviceShape : convertedShapes) {
+                    MapAreaServiceGuest.ShapeData guestShape = new MapAreaServiceGuest.ShapeData();
+                    guestShape.name = serviceShape.name;
+                    guestShape.areaType = serviceShape.areaType;
+                    guestShape.geoJson = serviceShape.geoJson;
+                    guestShape.latitude = serviceShape.latitude;
+                    guestShape.longitude = serviceShape.longitude;
+                    guestShape.address = serviceShape.address;
+                    guestShapes.add(guestShape);
+                }
+                
+                return MapAreaServiceGuest.saveShapesForGuest(guestShapes, parentRecordId, relationshipFieldName);
             } else {
                 // ✅ Route to MapAreaService (with sharing)
                 System.debug('🔐 Routing to MapAreaService');
-                return MapAreaService.saveMapAreas(shapesData, parentRecordId, relationshipFieldName);
+                return MapAreaService.saveMapAreas(convertedShapes, parentRecordId, relationshipFieldName);
             }
             
         } catch (Exception e) {
