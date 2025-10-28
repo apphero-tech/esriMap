@@ -1,44 +1,21 @@
 <?xml version='1.0' encoding='UTF-8'?>
 <ns0:PermissionSet xmlns:ns0="http://soap.sforce.com/2006/04/metadata">
-    <ns0:description>Permission Set pour les Guest Users de la Community - esriMap. Stratégie : droits minimaux CRUD sans viewAllRecords/modifyAllRecords (incompatibles avec les Guest User Licenses).</ns0:description>
+    <ns0:description>esriMap Community Guest - Signaler des nids de poule (Cases) via Flow + Carte</ns0:description>
     <ns0:hasActivationRequired>false</ns0:hasActivationRequired>
     <ns0:label>esriMap – Community Guest</ns0:label>
     
+    <!-- ✅ Autoriser Create/Edit/Read sur Case (pour les guests) -->
     <ns0:objectPermissions>
         <ns0:allowCreate>true</ns0:allowCreate>
-        <ns0:allowDelete>true</ns0:allowDelete>
+        <ns0:allowDelete>false</ns0:allowDelete>
         <ns0:allowEdit>true</ns0:allowEdit>
         <ns0:allowRead>true</ns0:allowRead>
         <ns0:modifyAllRecords>false</ns0:modifyAllRecords>
-        <ns0:object>Map_Area__c</ns0:object>
+        <ns0:object>Case</ns0:object>
         <ns0:viewAllRecords>false</ns0:viewAllRecords>
     </ns0:objectPermissions>
     
-    <ns0:fieldPermissions>
-        <ns0:editable>true</ns0:editable>
-        <ns0:field>Map_Area__c.Geometry_JSON__c</ns0:field>
-        <ns0:readable>true</ns0:readable>
-    </ns0:fieldPermissions>
-    <ns0:fieldPermissions>
-        <ns0:editable>true</ns0:editable>
-        <ns0:field>Map_Area__c.Latitude__c</ns0:field>
-        <ns0:readable>true</ns0:readable>
-    </ns0:fieldPermissions>
-    <ns0:fieldPermissions>
-        <ns0:editable>true</ns0:editable>
-        <ns0:field>Map_Area__c.Longitude__c</ns0:field>
-        <ns0:readable>true</ns0:readable>
-    </ns0:fieldPermissions>
-    <ns0:fieldPermissions>
-        <ns0:editable>true</ns0:editable>
-        <ns0:field>Map_Area__c.Address__c</ns0:field>
-        <ns0:readable>true</ns0:readable>
-    </ns0:fieldPermissions>
-    <ns0:fieldPermissions>
-        <ns0:editable>true</ns0:editable>
-        <ns0:field>Map_Area__c.Is_Synchronized__c</ns0:field>
-        <ns0:readable>true</ns0:readable>
-    </ns0:fieldPermissions>
+    <!-- ✅ FLS sur Case (champs de localisation) -->
     <ns0:fieldPermissions>
         <ns0:editable>true</ns0:editable>
         <ns0:field>Case.esriMap_Latitude__c</ns0:field>
@@ -54,7 +31,45 @@
         <ns0:field>Case.esriMap_Address__c</ns0:field>
         <ns0:readable>true</ns0:readable>
     </ns0:fieldPermissions>
-
+    
+    <!-- ✅ Lecture seule sur Map_Area__c (Apex "without sharing" s'en charge) -->
+    <ns0:objectPermissions>
+        <ns0:allowCreate>false</ns0:allowCreate>
+        <ns0:allowDelete>false</ns0:allowDelete>
+        <ns0:allowEdit>false</ns0:allowEdit>
+        <ns0:allowRead>true</ns0:allowRead>
+        <ns0:modifyAllRecords>false</ns0:modifyAllRecords>
+        <ns0:object>Map_Area__c</ns0:object>
+        <ns0:viewAllRecords>false</ns0:viewAllRecords>
+    </ns0:objectPermissions>
+    
+    <!-- FLS sur Map_Area__c (tous les champs en readable only) -->
+    <ns0:fieldPermissions>
+        <ns0:editable>false</ns0:editable>
+        <ns0:field>Map_Area__c.Geometry_JSON__c</ns0:field>
+        <ns0:readable>true</ns0:readable>
+    </ns0:fieldPermissions>
+    <ns0:fieldPermissions>
+        <ns0:editable>false</ns0:editable>
+        <ns0:field>Map_Area__c.Latitude__c</ns0:field>
+        <ns0:readable>true</ns0:readable>
+    </ns0:fieldPermissions>
+    <ns0:fieldPermissions>
+        <ns0:editable>false</ns0:editable>
+        <ns0:field>Map_Area__c.Longitude__c</ns0:field>
+        <ns0:readable>true</ns0:readable>
+    </ns0:fieldPermissions>
+    <ns0:fieldPermissions>
+        <ns0:editable>false</ns0:editable>
+        <ns0:field>Map_Area__c.Address__c</ns0:field>
+        <ns0:readable>true</ns0:readable>
+    </ns0:fieldPermissions>
+    <ns0:fieldPermissions>
+        <ns0:editable>false</ns0:editable>
+        <ns0:field>Map_Area__c.Is_Synchronized__c</ns0:field>
+        <ns0:readable>true</ns0:readable>
+    </ns0:fieldPermissions>
+    
     <ns0:tabSettings>
         <ns0:tab>Map_Area__c</ns0:tab>
         <ns0:visibility>Visible</ns0:visibility>
