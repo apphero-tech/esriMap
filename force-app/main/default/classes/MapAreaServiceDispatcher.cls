@@ -86,6 +86,14 @@ public without sharing class MapAreaServiceDispatcher {
             
             System.debug('🔍 User type detected: ' + (isGuestUser ? 'GUEST' : 'INTERNAL'));
             
+            if (isGuestUser) {
+                // ❌ Ne pas créer pour les invités: retourner un message clair et non technique
+                result.success = false;
+                result.message = 'Fonctionnalité indisponible pour les utilisateurs invités. Veuillez contacter votre administrateur pour obtenir les licences nécessaires.';
+                result.errors.add('GUEST_USER_NOT_SUPPORTED');
+                return result;
+            }
+            
             // Convert ShapeData to MapAreaService.ShapeData
             List<MapAreaService.ShapeData> convertedShapes = new List<MapAreaService.ShapeData>();
             for (ShapeData shape : shapesData) {
@@ -99,31 +107,10 @@ public without sharing class MapAreaServiceDispatcher {
                 convertedShapes.add(serviceShape);
             }
             
-            if (isGuestUser) {
-                // ✅ Route to MapAreaServiceGuest (without sharing)
-                System.debug('🔓 Routing to MapAreaServiceGuest');
-                
-                // Convert to MapAreaServiceGuest.ShapeData
-                List<MapAreaServiceGuest.ShapeData> guestShapes = new List<MapAreaServiceGuest.ShapeData>();
-                for (MapAreaService.ShapeData serviceShape : convertedShapes) {
-                    MapAreaServiceGuest.ShapeData guestShape = new MapAreaServiceGuest.ShapeData();
-                    guestShape.name = serviceShape.name;
-                    guestShape.areaType = serviceShape.areaType;
-                    guestShape.geoJson = serviceShape.geoJson;
-                    guestShape.latitude = serviceShape.latitude;
-                    guestShape.longitude = serviceShape.longitude;
-                    guestShape.address = serviceShape.address;
-                    guestShapes.add(guestShape);
-                }
-                
-                MapAreaServiceGuest.SaveResult guestResult = MapAreaServiceGuest.saveShapesForGuest(guestShapes, parentRecordId, relationshipFieldName);
-                return convertGuestResult(guestResult);
-            } else {
-                // ✅ Route to MapAreaService (with sharing)
-                System.debug('🔐 Routing to MapAreaService');
-                MapAreaService.SaveResult serviceResult = MapAreaService.saveMapAreas(convertedShapes, parentRecordId, relationshipFieldName);
-                return convertServiceResult(serviceResult);
-            }
+            // ✅ Utilisateurs authentifiés: route vers le service principal
+            System.debug('🔐 Routing to MapAreaService');
+            MapAreaService.SaveResult serviceResult = MapAreaService.saveMapAreas(convertedShapes, parentRecordId, relationshipFieldName);
+            return convertServiceResult(serviceResult);
             
         } catch (Exception e) {
             result.success = false;
@@ -150,36 +137,10 @@ public without sharing class MapAreaServiceDispatcher {
         if (serviceResult.errorDetails != null) {
             for (MapAreaService.ErrorDetail detail : serviceResult.errorDetails) {
                 result.errorDetails.add(new ErrorDetail(
-                    detail.message,
-                    detail.field,
-                    detail.errorType,
-                    detail.index
-                ));
-            }
-        }
-        
-        return result;
-    }
-    
-    /**
-     * Convert MapAreaServiceGuest.SaveResult to Dispatcher.SaveResult
-     */
-    private static SaveResult convertGuestResult(MapAreaServiceGuest.SaveResult guestResult) {
-        SaveResult result = new SaveResult();
-        result.success = guestResult.success;
-        result.message = guestResult.message;
-        result.recordIds = guestResult.recordIds;
-        result.recordsCreated = guestResult.recordsCreated;
-        result.errors = guestResult.errors;
-        
-        // Convert error details
-        if (guestResult.errorDetails != null) {
-            for (MapAreaServiceGuest.ErrorDetail detail : guestResult.errorDetails) {
-                result.errorDetails.add(new ErrorDetail(
-                    detail.message,
-                    detail.field,
-                    detail.errorType,
-                    detail.index
+                    detail.errorMessage,
+                    detail.fieldName,
+                    detail.validation,
+                    detail.itemIndex
                 ));
             }
         }
