@@ -230,6 +230,34 @@ Ajouter le composant `esriMapEditor` sur une Record Page avec les propriétés :
 
 *Dernière mise à jour : Octobre 2025*
 
+## 🎯 Phase 1 - Production Stable (Oct 2025)
+
+**Status**: ✅ **STABLE - PRODUCTION READY**
+
+Le package esriMap a été simplifié et stabilisé pour la production :
+
+### ✅ Ce qui fonctionne parfaitement
+- ✅ Utilisateurs authentifiés (Admin, Internal, External)
+- ✅ Création de formes sur la carte
+- ✅ Synchronisation manuelle vers Case/Opportunity
+- ✅ Suppression de formes
+- ✅ Champs Number/Text pour les coordonnées
+
+### ℹ️ Utilisateurs Community (Guest Users)
+
+Les **utilisateurs non authentifiés (Guest Users) dans la Community** reçoivent un message clair :
+
+```
+"Fonctionnalité indisponible pour les utilisateurs invités. 
+ Veuillez contacter votre administrateur pour obtenir les licences nécessaires."
+```
+
+**Raison technique** : Les Salesforce Guest User Licenses ne permettent pas la création d'objets personnalisés. C'est une limitation intentionnelle de Salesforce pour des raisons de sécurité.
+
+**Solution future (Phase 2)** : Un workaround custom sera développé pour permettre aux guests de créer des Cases (objets standard) avec localisation, ce qui contournera cette limitation.
+
+---
+
 ## 🔒 Configuration Field Level Security (FLS) - Important
 
 **Le champ `Is_Synchronized__c` (Synchronisée)** est un champ Checkbox qui nécessite une configuration FLS manuelle pour être visible sur la page layout de Map_Area__c.
