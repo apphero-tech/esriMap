@@ -7,8 +7,13 @@
         </div>
         <div class="slds-card__body slds-card__body_inner">
             <div class="map-container">
-                <iframe 
-                    src={vfPageUrl} 
+                <template lwc:if={isLoading}>
+                    <div class="loading-overlay">
+                        <lightning-spinner alternative-text="Chargement..." size="medium"></lightning-spinner>
+                    </div>
+                </template>
+                <iframe
+                    src={vfPageUrl}
                     title="Carte ArcGIS - Visualisation de la zone"
                     class="map-iframe"
                     onload={onMapReady}

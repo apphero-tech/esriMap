@@ -122,7 +122,8 @@ export default class EsriMapViewer extends LightningElement {
                     latitude: mapAreaData.Latitude__c,
                     longitude: mapAreaData.Longitude__c
                 },
-                readOnlyMode: true
+                readOnlyMode: true,
+                zoomLevel: this.initialZoom
             }
         };
         
@@ -134,18 +135,16 @@ export default class EsriMapViewer extends LightningElement {
     sendMessageToVF(message) {
         const iframe = this.template.querySelector('.map-iframe');
         if (iframe && iframe.contentWindow) {
-            iframe.contentWindow.postMessage(message, '*');
+            // Utiliser l'origine Salesforce pour plus de sécurité
+            const targetOrigin = window.location.origin;
+            iframe.contentWindow.postMessage(message, targetOrigin);
         }
     }
     
     // Gérer le chargement de l'iframe
     onMapReady() {
-        console.log('🗺️ Iframe chargée, attente initialisation carte...');
-        // Attendre que la page Visualforce soit complètement initialisée
-        setTimeout(() => {
-            if (this.currentRecordId) {
-                this.loadGeometryFromRecord();
-            }
-        }, 2000); // Attendre 2 secondes pour l'initialisation complète
+        console.log('🗺️ Iframe chargée, attente du message MAP_READY...');
+        // Le chargement de la géométrie est déclenché uniquement par le message MAP_READY
+        // pour éviter un double chargement
     }
 }

@@ -9,6 +9,8 @@
     <targetConfigs>
         <targetConfig targets="lightning__RecordPage">
             <property name="recordId" type="String" description="ID de l'enregistrement Map_Area__c à afficher"/>
+            <property name="title" type="String" label="Titre" description="Titre de la carte (optionnel)"/>
+            <property name="initialZoom" type="Integer" label="Zoom initial" description="Niveau de zoom initial (1-28, par défaut 12)"/>
         </targetConfig>
         <targetConfig targets="lightning__FlowScreen">
             <property name="recordId" type="String" description="ID de l'enregistrement Map_Area__c à afficher"/>

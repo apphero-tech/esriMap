@@ -664,23 +664,29 @@ public with sharing class MapAreaService {
                 System.debug('❌ deletedAreas is empty');
                 return;
             }
-            
-            // Trouver tous les champs de relation
+
+            // Trouver tous les champs de relation personnalisés (exclure les champs système)
             Schema.SObjectType mapAreaType = Map_Area__c.sObjectType;
             Map<String, Schema.SObjectField> fieldMap = mapAreaType.getDescribe().fields.getMap();
             List<String> relationshipFields = new List<String>();
-            
+            Set<String> systemFields = new Set<String>{'ownerid', 'createdbyid', 'lastmodifiedbyid'};
+
             for (String fieldName : fieldMap.keySet()) {
+                // Exclure les champs système
+                if (systemFields.contains(fieldName.toLowerCase())) {
+                    continue;
+                }
                 Schema.DescribeFieldResult fieldDescribe = fieldMap.get(fieldName).getDescribe();
                 if (fieldDescribe.getType() == Schema.DisplayType.REFERENCE) {
                     relationshipFields.add(fieldName);
                 }
             }
             
-            // Collecter les parents uniques
+            // Collecter les parents uniques et leurs champs de relation
             Set<Id> parentIds = new Set<Id>();
             Map<Id, String> parentIdToType = new Map<Id, String>();
-            
+            Map<Id, String> parentIdToRelField = new Map<Id, String>();
+
             for (Map_Area__c area : deletedAreas) {
                 for (String relField : relationshipFields) {
                     Object parentIdObj = area.get(relField);
@@ -688,40 +694,27 @@ public with sharing class MapAreaService {
                         Id parentId = (Id) parentIdObj;
                         parentIds.add(parentId);
                         parentIdToType.put(parentId, parentId.getSObjectType().getDescribe().getName());
+                        parentIdToRelField.put(parentId, relField);
                         break;
                     }
                 }
             }
-            
+
             if (parentIds.isEmpty()) {
                 return;
             }
-            
+
             // Pour chaque parent, vérifier s'il reste des formes
             for (Id parentId : parentIds) {
                 String parentType = parentIdToType.get(parentId);
-                String relField = null;
-                
-                // Trouver le champ de relation
-                for (String rf : relationshipFields) {
-                    String testQuery = 'SELECT Id FROM Map_Area__c WHERE ' + rf + ' = :parentId LIMIT 1';
-                    try {
-                        List<Map_Area__c> testList = Database.query(testQuery);
-                        if (!testList.isEmpty()) {
-                            relField = rf;
-                            break;
-                        }
-                    } catch (Exception e) {
-                        // Continue
-                    }
-                }
-                
+                String relField = parentIdToRelField.get(parentId);
+
                 if (relField != null) {
                     // Compter les formes restantes
                     String countQuery = 'SELECT COUNT() FROM Map_Area__c WHERE ' + relField + ' = :parentId';
                     Integer formCount = Database.countQuery(countQuery);
                     System.debug('📊 Parent ' + parentId + ' (' + parentType + ') - Formes restantes: ' + formCount);
-                    
+
                     // Si zéro forme, vider les champs
                     if (formCount == 0) {
                         System.debug('✅ Vidage des champs pour parent ' + parentId);

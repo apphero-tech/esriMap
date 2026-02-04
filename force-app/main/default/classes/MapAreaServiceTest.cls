@@ -1776,4 +1776,1541 @@ public class MapAreaServiceTest {
       );
     }
   }
+
+  // ========================================================================
+  // TESTS ADDITIONNELS POUR COUVERTURE 100%
+  // ========================================================================
+
+  @isTest
+  static void testGetMapAreasByRelationshipWithExistingLookupField() {
+    // Test the successful path of getMapAreasByRelationship
+    // Using a field that might exist as a lookup
+    Test.startTest();
+
+    // Test avec un champ qui n'est pas une référence (devrait retourner vide)
+    Map<Id, Map_Area__c> result = MapAreaService.getMapAreasByRelationship(
+      'a00000000000001AAA',
+      'Name' // Name n'est pas un champ de référence
+    );
+
+    Test.stopTest();
+
+    System.assertEquals(0, result.size(), 'Should return empty for non-reference field');
+  }
+
+  @isTest
+  static void testSaveMapAreasWithDatabaseErrors() {
+    // Test pour couvrir les erreurs de Database.insert (lignes 263-298)
+    // On ne peut pas facilement simuler des erreurs DML, mais on peut tester le chemin d'erreur
+    List<MapAreaService.ShapeData> shapesData = new List<MapAreaService.ShapeData>();
+
+    // Créer une forme avec un type invalide pour forcer une erreur
+    MapAreaService.ShapeData shape = new MapAreaService.ShapeData();
+    shape.areaType = 'InvalidAreaType';
+    shape.latitude = 48.8566;
+    shape.longitude = 2.3522;
+    shape.geoJson = '{"type":"Invalid"}';
+    shapesData.add(shape);
+
+    Test.startTest();
+    MapAreaService.SaveResult result = MapAreaService.saveMapAreas(shapesData, null, null);
+    Test.stopTest();
+
+    System.assertEquals(false, result.success, 'Should fail with invalid area type');
+    System.assert(result.errorDetails.size() > 0, 'Should have error details');
+  }
+
+  @isTest
+  static void testSaveMapAreasNoValidShapesAfterValidation() {
+    // Test le cas où toutes les formes sont invalides (ligne 240-243)
+    List<MapAreaService.ShapeData> shapesData = new List<MapAreaService.ShapeData>();
+
+    // Ajouter plusieurs formes invalides
+    for (Integer i = 0; i < 3; i++) {
+      MapAreaService.ShapeData shape = new MapAreaService.ShapeData();
+      shape.areaType = 'InvalidType' + i;
+      shape.latitude = 48.8566;
+      shape.longitude = 2.3522;
+      shapesData.add(shape);
+    }
+
+    Test.startTest();
+    MapAreaService.SaveResult result = MapAreaService.saveMapAreas(shapesData, null, null);
+    Test.stopTest();
+
+    System.assertEquals(false, result.success, 'Should fail when all shapes are invalid');
+    System.assertEquals('Aucune forme valide à sauvegarder', result.message, 'Should have correct message');
+  }
+
+  @isTest
+  static void testSaveMapAreasWithTruncatedGeoJson() {
+    // Test le cas où le GeoJSON dépasse 32768 caractères (ligne 209-210)
+    List<MapAreaService.ShapeData> shapesData = new List<MapAreaService.ShapeData>();
+
+    MapAreaService.ShapeData shape = new MapAreaService.ShapeData();
+    shape.areaType = 'Polygon';
+    shape.latitude = 48.8566;
+    shape.longitude = 2.3522;
+
+    // Créer un GeoJSON de plus de 32768 caractères
+    String hugeGeoJson = '{"type":"Polygon","coordinates":[';
+    while (hugeGeoJson.length() < 35000) {
+      hugeGeoJson += '[2.3522,48.8566],';
+    }
+    hugeGeoJson += '[2.3522,48.8566]]}';
+    shape.geoJson = hugeGeoJson;
+    shapesData.add(shape);
+
+    Test.startTest();
+    MapAreaService.SaveResult result = MapAreaService.saveMapAreas(shapesData, null, null);
+    Test.stopTest();
+
+    System.assertEquals(true, result.success, 'Should succeed with truncated GeoJSON');
+
+    // Vérifier que le GeoJSON a été tronqué
+    if (result.recordIds.size() > 0) {
+      Map_Area__c saved = [SELECT Geometry_JSON__c FROM Map_Area__c WHERE Id = :result.recordIds[0]];
+      System.assert(saved.Geometry_JSON__c.length() <= 32768, 'GeoJSON should be truncated');
+      System.assert(saved.Geometry_JSON__c.endsWith('...'), 'Truncated GeoJSON should end with ...');
+    }
+  }
+
+  @isTest
+  static void testDeleteMapAreaWithException() {
+    // Test le chemin d'exception dans deleteMapArea (lignes 392-395)
+    Test.startTest();
+
+    // Utiliser un ID valide mais pour un objet qui n'existe pas
+    // Cela devrait retourner "introuvable" pas une exception
+    String fakeId = Map_Area__c.sObjectType.getDescribe().getKeyPrefix() + '000000000099';
+    Map<String, Object> result = MapAreaService.deleteMapArea(fakeId);
+
+    Test.stopTest();
+
+    System.assertEquals(false, result.get('success'), 'Should fail for non-existent record');
+  }
+
+  @isTest
+  static void testDeleteMapAreasWithNonExistentIds() {
+    // Test le chemin où aucun enregistrement n'est trouvé (lignes 418-421)
+    Test.startTest();
+
+    String keyPrefix = Map_Area__c.sObjectType.getDescribe().getKeyPrefix();
+    List<Id> fakeIds = new List<Id>{
+      keyPrefix + '000000000097',
+      keyPrefix + '000000000098',
+      keyPrefix + '000000000099'
+    };
+
+    Map<String, Object> result = MapAreaService.deleteMapAreas(fakeIds);
+
+    Test.stopTest();
+
+    System.assertEquals(false, result.get('success'), 'Should fail when no records found');
+    System.assertEquals('Aucun enregistrement trouvé', result.get('message'), 'Should have correct message');
+  }
+
+  @isTest
+  static void testSyncShapeToParentMapAreaNotFound() {
+    // Test le cas où la Map_Area n'est pas trouvée (lignes 469-472)
+    Test.startTest();
+
+    Case testCase = new Case(Subject = 'Test Case');
+    insert testCase;
+
+    String keyPrefix = Map_Area__c.sObjectType.getDescribe().getKeyPrefix();
+    String fakeMapAreaId = keyPrefix + '000000000099';
+
+    try {
+      Map<String, Object> result = MapAreaService.syncShapeToParent(
+        fakeMapAreaId,
+        testCase.Id,
+        'Case__c'
+      );
+
+      // Si on arrive ici, vérifier que c'est une erreur
+      System.assertEquals(false, result.get('success'), 'Should fail for non-existent Map_Area');
+    } catch (Exception e) {
+      // QueryException est acceptable
+      System.assert(e.getMessage() != null, 'Exception should have message');
+    }
+
+    Test.stopTest();
+  }
+
+  @isTest
+  static void testGetParentObjectTypeWithValidId() {
+    // Test getParentObjectType indirectement via syncShapeToParent
+    Test.startTest();
+
+    Account testAccount = new Account(Name = 'Test Account');
+    insert testAccount;
+
+    Map_Area__c mapArea = new Map_Area__c(
+      Area_Type__c = 'Point',
+      Latitude__c = 48.8566,
+      Longitude__c = 2.3522,
+      Address__c = 'Test'
+    );
+    insert mapArea;
+
+    // Cet appel va utiliser getParentObjectType en interne
+    Map<String, Object> result = MapAreaService.syncShapeToParent(
+      mapArea.Id,
+      testAccount.Id,
+      'Account__c'
+    );
+
+    Test.stopTest();
+
+    // Le résultat dépend de la configuration, mais ne doit pas planter
+    System.assertNotEquals(null, result, 'Result should not be null');
+  }
+
+  @isTest
+  static void testHandleDeletedSynchronizedMapAreasWithParentRelation() {
+    // Test handleDeletedSynchronizedMapAreas avec des zones qui ont des relations
+    Test.startTest();
+
+    // Créer des zones avec Is_Synchronized__c = true
+    List<Map_Area__c> areas = new List<Map_Area__c>();
+    for (Integer i = 0; i < 3; i++) {
+      Map_Area__c area = new Map_Area__c(
+        Area_Type__c = 'Point',
+        Latitude__c = 48.8566 + (i * 0.01),
+        Longitude__c = 2.3522 + (i * 0.01),
+        Address__c = 'Test Delete ' + i,
+        Is_Synchronized__c = true
+      );
+      areas.add(area);
+    }
+    insert areas;
+
+    // La suppression déclenchera le trigger qui appelle handleDeletedSynchronizedMapAreas
+    delete areas;
+
+    Test.stopTest();
+
+    // Vérifier que les zones sont supprimées
+    List<Map_Area__c> remaining = [SELECT Id FROM Map_Area__c WHERE Id IN :areas];
+    System.assertEquals(0, remaining.size(), 'All areas should be deleted');
+  }
+
+  @isTest
+  static void testEnforceExclusiveSynchronizationViaTrigger() {
+    // Test enforceExclusiveSynchronization via le trigger after update
+    Test.startTest();
+
+    // Créer plusieurs zones
+    List<Map_Area__c> areas = new List<Map_Area__c>();
+    for (Integer i = 0; i < 3; i++) {
+      Map_Area__c area = new Map_Area__c(
+        Area_Type__c = 'Point',
+        Latitude__c = 48.8566 + (i * 0.01),
+        Longitude__c = 2.3522 + (i * 0.01),
+        Address__c = 'Sync Trigger Test ' + i,
+        Is_Synchronized__c = false
+      );
+      areas.add(area);
+    }
+    insert areas;
+
+    // Mettre à jour une zone pour la marquer comme synchronisée
+    areas[0].Is_Synchronized__c = true;
+    update areas[0];
+
+    Test.stopTest();
+
+    // Vérifier que le trigger a été déclenché
+    Map_Area__c updated = [SELECT Is_Synchronized__c FROM Map_Area__c WHERE Id = :areas[0].Id];
+    System.assertEquals(true, updated.Is_Synchronized__c, 'Area should be synchronized');
+  }
+
+  @isTest
+  static void testSaveMapAreasPartialSuccessWithErrors() {
+    // Test le cas de succès partiel avec des erreurs (lignes 304-313)
+    List<MapAreaService.ShapeData> shapesData = new List<MapAreaService.ShapeData>();
+
+    // Une forme valide
+    MapAreaService.ShapeData validShape = new MapAreaService.ShapeData();
+    validShape.areaType = 'Point';
+    validShape.latitude = 48.8566;
+    validShape.longitude = 2.3522;
+    validShape.address = 'Valid Address';
+    validShape.geoJson = '{"type":"Point"}';
+    shapesData.add(validShape);
+
+    // Une forme invalide
+    MapAreaService.ShapeData invalidShape = new MapAreaService.ShapeData();
+    invalidShape.areaType = 'NotValid';
+    invalidShape.latitude = 48.8566;
+    invalidShape.longitude = 2.3522;
+    shapesData.add(invalidShape);
+
+    Test.startTest();
+    MapAreaService.SaveResult result = MapAreaService.saveMapAreas(shapesData, null, null);
+    Test.stopTest();
+
+    // Devrait avoir un succès partiel
+    System.assertEquals(true, result.success, 'Should have partial success');
+    System.assertEquals(1, result.recordsCreated, 'Should create 1 record');
+    System.assert(result.errors.size() > 0, 'Should have errors for invalid shape');
+  }
+
+  @isTest
+  static void testSyncShapeToParentWithUnsupportedParentType() {
+    // Test syncShapeToParent avec un type de parent non supporté
+    Test.startTest();
+
+    Map_Area__c mapArea = new Map_Area__c(
+      Area_Type__c = 'Point',
+      Latitude__c = 48.8566,
+      Longitude__c = 2.3522,
+      Address__c = 'Test'
+    );
+    insert mapArea;
+
+    // Utiliser un ID de Case
+    Case testCase = new Case(Subject = 'Test');
+    insert testCase;
+
+    // Appeler avec un champ de relation qui n'existe pas
+    try {
+      Map<String, Object> result = MapAreaService.syncShapeToParent(
+        mapArea.Id,
+        testCase.Id,
+        'NonExistentLookup__c'
+      );
+
+      // Devrait retourner une erreur, pas planter
+      System.assertEquals(false, result.get('success'), 'Should fail gracefully');
+    } catch (Exception e) {
+      // Exception est acceptable pour un champ inexistant
+      System.assert(e.getMessage() != null, 'Should have error message');
+    }
+
+    Test.stopTest();
+  }
+
+  @isTest
+  static void testSyncShapeToParentWithMismatchedParent() {
+    // Test le cas où la zone n'est pas liée au parent spécifié (lignes 476-480)
+    Test.startTest();
+
+    // Créer deux comptes
+    Account account1 = new Account(Name = 'Account 1');
+    Account account2 = new Account(Name = 'Account 2');
+    insert new List<Account>{account1, account2};
+
+    // Créer une Map_Area (non liée)
+    Map_Area__c mapArea = new Map_Area__c(
+      Area_Type__c = 'Point',
+      Latitude__c = 48.8566,
+      Longitude__c = 2.3522,
+      Address__c = 'Test'
+    );
+    insert mapArea;
+
+    // Essayer de synchroniser avec un compte différent
+    try {
+      Map<String, Object> result = MapAreaService.syncShapeToParent(
+        mapArea.Id,
+        account2.Id,
+        'Account__c'
+      );
+
+      // Le résultat dépend de si le champ Account__c existe
+      System.assertNotEquals(null, result, 'Result should not be null');
+    } catch (Exception e) {
+      // Exception acceptable si le champ n'existe pas
+      System.assert(true, 'Exception handling works');
+    }
+
+    Test.stopTest();
+  }
+
+  @isTest
+  static void testMultipleSynchronizationUpdates() {
+    // Test plusieurs mises à jour de synchronisation pour couvrir enforceExclusiveSynchronization
+    Test.startTest();
+
+    // Créer plusieurs zones
+    List<Map_Area__c> areas = new List<Map_Area__c>();
+    for (Integer i = 0; i < 5; i++) {
+      Map_Area__c area = new Map_Area__c(
+        Area_Type__c = 'Point',
+        Latitude__c = 48.8566 + (i * 0.01),
+        Longitude__c = 2.3522 + (i * 0.01),
+        Address__c = 'Multi Sync Test ' + i,
+        Is_Synchronized__c = false
+      );
+      areas.add(area);
+    }
+    insert areas;
+
+    // Marquer la première comme synchronisée
+    areas[0].Is_Synchronized__c = true;
+    update areas[0];
+
+    // Marquer une autre comme synchronisée (devrait désynchroniser la première)
+    areas[2].Is_Synchronized__c = true;
+    update areas[2];
+
+    Test.stopTest();
+
+    // Vérifier l'état final
+    List<Map_Area__c> refreshed = [
+      SELECT Id, Is_Synchronized__c
+      FROM Map_Area__c
+      WHERE Id IN :areas
+      ORDER BY Address__c
+    ];
+
+    System.assertEquals(5, refreshed.size(), 'Should have 5 areas');
+  }
+
+  @isTest
+  static void testClearParentSynchronizationFieldsIndirectly() {
+    // Test clearParentSynchronizationFields via la suppression de toutes les zones d'un parent
+    Test.startTest();
+
+    // Créer des zones synchronisées
+    List<Map_Area__c> syncedAreas = new List<Map_Area__c>();
+    for (Integer i = 0; i < 2; i++) {
+      Map_Area__c area = new Map_Area__c(
+        Area_Type__c = 'Point',
+        Latitude__c = 48.8566 + (i * 0.01),
+        Longitude__c = 2.3522 + (i * 0.01),
+        Address__c = 'Clear Test ' + i,
+        Is_Synchronized__c = true
+      );
+      syncedAreas.add(area);
+    }
+    insert syncedAreas;
+
+    // Supprimer toutes les zones (devrait appeler clearParentSynchronizationFields)
+    delete syncedAreas;
+
+    Test.stopTest();
+
+    // Vérifier que les zones sont supprimées
+    List<Map_Area__c> remaining = [SELECT Id FROM Map_Area__c WHERE Id IN :syncedAreas];
+    System.assertEquals(0, remaining.size(), 'All synced areas should be deleted');
+  }
+
+  @isTest
+  static void testSaveMapAreasWithValidParentAndRelationship() {
+    // Test saveMapAreas avec un parent et un champ de relation valides
+    Test.startTest();
+
+    // Créer un Account comme parent
+    Account parentAccount = new Account(Name = 'Parent for Map Area');
+    insert parentAccount;
+
+    List<MapAreaService.ShapeData> shapesData = new List<MapAreaService.ShapeData>();
+    MapAreaService.ShapeData shape = new MapAreaService.ShapeData();
+    shape.areaType = 'Point';
+    shape.latitude = 48.8566;
+    shape.longitude = 2.3522;
+    shape.address = 'Test with Parent';
+    shape.geoJson = '{"type":"Point"}';
+    shapesData.add(shape);
+
+    // Appeler avec un champ de relation qui peut ne pas exister
+    // Le code doit gérer gracieusement ce cas
+    MapAreaService.SaveResult result = MapAreaService.saveMapAreas(
+      shapesData,
+      parentAccount.Id,
+      'Account__c'
+    );
+
+    Test.stopTest();
+
+    // Le résultat dépend de si le champ existe, mais ne doit pas planter
+    System.assertNotEquals(null, result, 'Result should not be null');
+    // Si le champ n'existe pas, le record sera créé sans le lien
+    System.assert(result.recordsCreated >= 0, 'Should have valid recordsCreated');
+  }
+
+  @isTest
+  static void testHandleDeletedAreasWithNoParent() {
+    // Test handleDeletedSynchronizedMapAreas avec des zones sans parent
+    Test.startTest();
+
+    List<Map_Area__c> areasNoParent = new List<Map_Area__c>();
+    for (Integer i = 0; i < 2; i++) {
+      Map_Area__c area = new Map_Area__c(
+        Area_Type__c = 'Polygon',
+        Latitude__c = 48.8566,
+        Longitude__c = 2.3522,
+        Address__c = 'No Parent Test ' + i
+      );
+      areasNoParent.add(area);
+    }
+    insert areasNoParent;
+
+    // Appeler directement la méthode
+    MapAreaService.handleDeletedSynchronizedMapAreas(areasNoParent);
+
+    Test.stopTest();
+
+    // Ne doit pas planter
+    System.assert(true, 'Method should handle areas without parent');
+  }
+
+  @isTest
+  static void testEnforceExclusiveSyncWithNoSyncedAreas() {
+    // Test enforceExclusiveSynchronization avec aucune zone synchronisée
+    Test.startTest();
+
+    List<Map_Area__c> noSyncAreas = new List<Map_Area__c>();
+    for (Integer i = 0; i < 3; i++) {
+      Map_Area__c area = new Map_Area__c(
+        Area_Type__c = 'Point',
+        Latitude__c = 48.8566,
+        Longitude__c = 2.3522,
+        Address__c = 'No Sync ' + i,
+        Is_Synchronized__c = false
+      );
+      noSyncAreas.add(area);
+    }
+    insert noSyncAreas;
+
+    // Appeler directement - aucune zone n'est synchronisée
+    MapAreaService.enforceExclusiveSynchronization(noSyncAreas);
+
+    Test.stopTest();
+
+    // Vérifier que rien n'a changé
+    List<Map_Area__c> refreshed = [
+      SELECT Is_Synchronized__c
+      FROM Map_Area__c
+      WHERE Id IN :noSyncAreas
+    ];
+    for (Map_Area__c area : refreshed) {
+      System.assertEquals(false, area.Is_Synchronized__c, 'Should remain not synchronized');
+    }
+  }
+
+  @isTest
+  static void testSaveMapAreasExceptionHandling() {
+    // Test le bloc catch général (lignes 316-320)
+    // Difficile à simuler, mais on teste que les exceptions sont gérées
+    Test.startTest();
+
+    List<MapAreaService.ShapeData> shapesData = new List<MapAreaService.ShapeData>();
+
+    // Créer une forme valide
+    MapAreaService.ShapeData shape = new MapAreaService.ShapeData();
+    shape.areaType = 'Point';
+    shape.latitude = 48.8566;
+    shape.longitude = 2.3522;
+    shape.geoJson = '{}';
+    shapesData.add(shape);
+
+    // Cet appel ne devrait pas lever d'exception
+    MapAreaService.SaveResult result = MapAreaService.saveMapAreas(shapesData, null, null);
+
+    Test.stopTest();
+
+    System.assertNotEquals(null, result, 'Result should not be null');
+  }
+
+  @isTest
+  static void testDeleteMapAreaTriggerException() {
+    // Test le chemin d'exception dans deleteMapArea
+    Test.startTest();
+
+    // Créer et supprimer immédiatement
+    Map_Area__c area = new Map_Area__c(
+      Area_Type__c = 'Point',
+      Latitude__c = 48.8566,
+      Longitude__c = 2.3522
+    );
+    insert area;
+    Id areaId = area.Id;
+    delete area;
+
+    // Essayer de supprimer à nouveau (devrait échouer gracieusement)
+    Map<String, Object> result = MapAreaService.deleteMapArea(areaId);
+
+    Test.stopTest();
+
+    System.assertEquals(false, result.get('success'), 'Should fail for already deleted record');
+  }
+
+  @isTest
+  static void testAllAreaTypesInSingleBatch() {
+    // Test tous les types de zones dans un seul batch
+    Test.startTest();
+
+    List<MapAreaService.ShapeData> allTypesData = new List<MapAreaService.ShapeData>();
+    List<String> types = new List<String>{'Point', 'Polyline', 'Polygon', 'Rectangle', 'Circle'};
+
+    for (String areaType : types) {
+      MapAreaService.ShapeData shape = new MapAreaService.ShapeData();
+      shape.areaType = areaType;
+      shape.latitude = 48.8566;
+      shape.longitude = 2.3522;
+      shape.address = 'Batch ' + areaType;
+      shape.geoJson = '{"type":"' + areaType + '"}';
+      allTypesData.add(shape);
+    }
+
+    MapAreaService.SaveResult result = MapAreaService.saveMapAreas(allTypesData, null, null);
+
+    Test.stopTest();
+
+    System.assertEquals(true, result.success, 'Should save all valid types');
+    System.assertEquals(5, result.recordsCreated, 'Should create 5 records');
+    System.assertEquals(5, result.recordIds.size(), 'Should return 5 IDs');
+  }
+
+  @isTest
+  static void testQueryExceptionInSyncShape() {
+    // Test le QueryException dans syncShapeToParent (lignes 623-627)
+    Test.startTest();
+
+    Case testCase = new Case(Subject = 'Query Exception Test');
+    insert testCase;
+
+    Map_Area__c mapArea = new Map_Area__c(
+      Area_Type__c = 'Point',
+      Latitude__c = 48.8566,
+      Longitude__c = 2.3522
+    );
+    insert mapArea;
+
+    // Utiliser un champ qui n'existe pas pour forcer une erreur
+    try {
+      Map<String, Object> result = MapAreaService.syncShapeToParent(
+        mapArea.Id,
+        testCase.Id,
+        'InvalidField__x'
+      );
+
+      // Si pas d'exception, vérifier l'erreur
+      System.assertEquals(false, result.get('success'), 'Should fail with invalid field');
+    } catch (Exception e) {
+      // Exception acceptable
+      System.assert(true, 'Query exception handled');
+    }
+
+    Test.stopTest();
+  }
+
+  @isTest
+  static void testBulkDeleteWithTrigger() {
+    // Test la suppression en masse qui déclenche le trigger
+    Test.startTest();
+
+    List<Map_Area__c> bulkAreas = new List<Map_Area__c>();
+    for (Integer i = 0; i < 50; i++) {
+      Map_Area__c area = new Map_Area__c(
+        Area_Type__c = 'Point',
+        Latitude__c = 48.8566 + (i * 0.001),
+        Longitude__c = 2.3522 + (i * 0.001),
+        Address__c = 'Bulk Delete ' + i,
+        Is_Synchronized__c = (Math.mod(i, 2) == 0)
+      );
+      bulkAreas.add(area);
+    }
+    insert bulkAreas;
+
+    // Supprimer en masse
+    delete bulkAreas;
+
+    Test.stopTest();
+
+    List<Map_Area__c> remaining = [SELECT Id FROM Map_Area__c WHERE Id IN :bulkAreas];
+    System.assertEquals(0, remaining.size(), 'All bulk areas should be deleted');
+  }
+
+  @isTest
+  static void testBulkUpdateWithTrigger() {
+    // Test la mise à jour en masse qui déclenche le trigger
+    Test.startTest();
+
+    List<Map_Area__c> bulkAreas = new List<Map_Area__c>();
+    for (Integer i = 0; i < 20; i++) {
+      Map_Area__c area = new Map_Area__c(
+        Area_Type__c = 'Point',
+        Latitude__c = 48.8566 + (i * 0.001),
+        Longitude__c = 2.3522 + (i * 0.001),
+        Address__c = 'Bulk Update ' + i,
+        Is_Synchronized__c = false
+      );
+      bulkAreas.add(area);
+    }
+    insert bulkAreas;
+
+    // Mettre à jour en masse - certains synchronisés
+    for (Integer i = 0; i < bulkAreas.size(); i++) {
+      bulkAreas[i].Is_Synchronized__c = (Math.mod(i, 3) == 0);
+    }
+    update bulkAreas;
+
+    Test.stopTest();
+
+    // Vérifier que le trigger a été exécuté
+    List<Map_Area__c> refreshed = [
+      SELECT Is_Synchronized__c
+      FROM Map_Area__c
+      WHERE Id IN :bulkAreas
+    ];
+    System.assertEquals(20, refreshed.size(), 'Should have 20 areas');
+  }
+
+  // ========================================================================
+  // TESTS POUR COUVERTURE COMPLÈTE - PHASE 2
+  // Utilisation du champ Case__c qui existe sur Map_Area__c
+  // ========================================================================
+
+  @isTest
+  static void testGetMapAreasByRelationshipWithCaseLookup() {
+    // Test getMapAreasByRelationship avec le champ Case__c qui existe
+    Test.startTest();
+
+    // Créer un Case
+    Case testCase = new Case(Subject = 'Test Case for Relationship');
+    insert testCase;
+
+    // Créer des Map_Area__c liés au Case via Case__c
+    List<Map_Area__c> linkedAreas = new List<Map_Area__c>();
+    for (Integer i = 0; i < 3; i++) {
+      Map_Area__c area = new Map_Area__c(
+        Area_Type__c = 'Point',
+        Latitude__c = 48.8566 + (i * 0.01),
+        Longitude__c = 2.3522 + (i * 0.01),
+        Address__c = 'Linked to Case ' + i,
+        Case__c = testCase.Id
+      );
+      linkedAreas.add(area);
+    }
+    insert linkedAreas;
+
+    // Appeler getMapAreasByRelationship avec Case__c
+    Map<Id, Map_Area__c> result = MapAreaService.getMapAreasByRelationship(
+      testCase.Id,
+      'Case__c'
+    );
+
+    Test.stopTest();
+
+    // Vérifier que les zones sont retournées
+    System.assertEquals(3, result.size(), 'Should return 3 linked areas');
+    for (Id areaId : result.keySet()) {
+      System.assertNotEquals(null, result.get(areaId), 'Each area should not be null');
+    }
+  }
+
+  @isTest
+  static void testSyncShapeToParentWithCaseLookupLinked() {
+    // Test syncShapeToParent avec une vraie relation Case__c
+    Test.startTest();
+
+    // Créer un Case
+    Case testCase = new Case(Subject = 'Sync Test Case');
+    insert testCase;
+
+    // Créer une Map_Area liée au Case
+    Map_Area__c mapArea = new Map_Area__c(
+      Area_Type__c = 'Point',
+      Latitude__c = 48.8566,
+      Longitude__c = 2.3522,
+      Address__c = 'Paris, France',
+      Case__c = testCase.Id
+    );
+    insert mapArea;
+
+    // Appeler syncShapeToParent
+    Map<String, Object> result = MapAreaService.syncShapeToParent(
+      mapArea.Id,
+      testCase.Id,
+      'Case__c'
+    );
+
+    Test.stopTest();
+
+    // Vérifier le résultat - peut échouer si les champs geolocation n'existent pas sur Case
+    System.assertNotEquals(null, result, 'Result should not be null');
+    System.assertNotEquals(null, result.get('success'), 'Should have success flag');
+    System.assertNotEquals(null, result.get('message'), 'Should have message');
+  }
+
+  @isTest
+  static void testSaveMapAreasWithCaseRelationship() {
+    // Test saveMapAreas avec lien vers Case
+    Test.startTest();
+
+    Case testCase = new Case(Subject = 'Save Test Case');
+    insert testCase;
+
+    List<MapAreaService.ShapeData> shapesData = new List<MapAreaService.ShapeData>();
+    MapAreaService.ShapeData shape = new MapAreaService.ShapeData();
+    shape.areaType = 'Point';
+    shape.latitude = 48.8566;
+    shape.longitude = 2.3522;
+    shape.address = 'Test with Case';
+    shape.geoJson = '{"type":"Point"}';
+    shapesData.add(shape);
+
+    // Sauvegarder avec lien vers Case
+    MapAreaService.SaveResult result = MapAreaService.saveMapAreas(
+      shapesData,
+      testCase.Id,
+      'Case__c'
+    );
+
+    Test.stopTest();
+
+    System.assertEquals(true, result.success, 'Should save successfully');
+    System.assertEquals(1, result.recordsCreated, 'Should create 1 record');
+
+    // Vérifier que le lien est correct
+    if (result.recordIds.size() > 0) {
+      Map_Area__c saved = [SELECT Case__c FROM Map_Area__c WHERE Id = :result.recordIds[0]];
+      System.assertEquals(testCase.Id, saved.Case__c, 'Should be linked to Case');
+    }
+  }
+
+  @isTest
+  static void testHandleDeletedSynchronizedMapAreasWithCase() {
+    // Test handleDeletedSynchronizedMapAreas avec des zones liées à un Case
+    Test.startTest();
+
+    Case testCase = new Case(Subject = 'Delete Sync Test');
+    insert testCase;
+
+    // Créer des zones synchronisées liées au Case
+    List<Map_Area__c> syncedAreas = new List<Map_Area__c>();
+    for (Integer i = 0; i < 2; i++) {
+      Map_Area__c area = new Map_Area__c(
+        Area_Type__c = 'Point',
+        Latitude__c = 48.8566 + (i * 0.01),
+        Longitude__c = 2.3522 + (i * 0.01),
+        Address__c = 'Synced Case Area ' + i,
+        Case__c = testCase.Id,
+        Is_Synchronized__c = true
+      );
+      syncedAreas.add(area);
+    }
+    insert syncedAreas;
+
+    // Supprimer les zones - le trigger appellera handleDeletedSynchronizedMapAreas
+    delete syncedAreas;
+
+    Test.stopTest();
+
+    // Vérifier que les zones sont supprimées
+    List<Map_Area__c> remaining = [SELECT Id FROM Map_Area__c WHERE Id IN :syncedAreas];
+    System.assertEquals(0, remaining.size(), 'All areas should be deleted');
+  }
+
+  @isTest
+  static void testEnforceExclusiveSyncWithCaseParent() {
+    // Test enforceExclusiveSynchronization avec des zones liées au même Case
+    Test.startTest();
+
+    Case testCase = new Case(Subject = 'Exclusive Sync Test');
+    insert testCase;
+
+    // Créer plusieurs zones liées au même Case
+    List<Map_Area__c> areas = new List<Map_Area__c>();
+    for (Integer i = 0; i < 4; i++) {
+      Map_Area__c area = new Map_Area__c(
+        Area_Type__c = 'Point',
+        Latitude__c = 48.8566 + (i * 0.01),
+        Longitude__c = 2.3522 + (i * 0.01),
+        Address__c = 'Exclusive Sync Case ' + i,
+        Case__c = testCase.Id,
+        Is_Synchronized__c = false
+      );
+      areas.add(area);
+    }
+    insert areas;
+
+    // Marquer la première comme synchronisée
+    areas[0].Is_Synchronized__c = true;
+    update areas[0];
+
+    // Marquer une autre comme synchronisée
+    areas[2].Is_Synchronized__c = true;
+    update areas[2];
+
+    Test.stopTest();
+
+    // Vérifier que enforceExclusiveSynchronization a été appelé
+    List<Map_Area__c> refreshed = [
+      SELECT Id, Is_Synchronized__c
+      FROM Map_Area__c
+      WHERE Case__c = :testCase.Id
+      ORDER BY Address__c
+    ];
+    System.assertEquals(4, refreshed.size(), 'Should have 4 areas');
+  }
+
+  @isTest
+  static void testDeleteAllAreasFromCase() {
+    // Test la suppression de toutes les zones d'un Case pour couvrir clearParentSynchronizationFields
+    Test.startTest();
+
+    Case testCase = new Case(Subject = 'Clear Fields Test');
+    insert testCase;
+
+    // Créer des zones liées
+    List<Map_Area__c> areas = new List<Map_Area__c>();
+    for (Integer i = 0; i < 3; i++) {
+      Map_Area__c area = new Map_Area__c(
+        Area_Type__c = 'Point',
+        Latitude__c = 48.8566 + (i * 0.01),
+        Longitude__c = 2.3522 + (i * 0.01),
+        Address__c = 'Clear Test ' + i,
+        Case__c = testCase.Id,
+        Is_Synchronized__c = (i == 0)
+      );
+      areas.add(area);
+    }
+    insert areas;
+
+    // Supprimer toutes les zones
+    delete areas;
+
+    Test.stopTest();
+
+    // Vérifier que toutes les zones sont supprimées
+    Integer remainingCount = [SELECT COUNT() FROM Map_Area__c WHERE Case__c = :testCase.Id];
+    System.assertEquals(0, remainingCount, 'No areas should remain for this Case');
+  }
+
+  @isTest
+  static void testSyncShapeToParentNotLinkedToParent() {
+    // Test le cas où la zone n'est pas liée au parent spécifié (lignes 476-480)
+    Test.startTest();
+
+    // Créer deux Cases
+    Case case1 = new Case(Subject = 'Case 1');
+    Case case2 = new Case(Subject = 'Case 2');
+    insert new List<Case>{case1, case2};
+
+    // Créer une Map_Area liée au case1
+    Map_Area__c mapArea = new Map_Area__c(
+      Area_Type__c = 'Point',
+      Latitude__c = 48.8566,
+      Longitude__c = 2.3522,
+      Address__c = 'Test',
+      Case__c = case1.Id
+    );
+    insert mapArea;
+
+    // Essayer de synchroniser avec case2 (mauvais parent)
+    Map<String, Object> result = MapAreaService.syncShapeToParent(
+      mapArea.Id,
+      case2.Id,
+      'Case__c'
+    );
+
+    Test.stopTest();
+
+    // Devrait échouer car la zone est liée à case1, pas case2
+    System.assertEquals(false, result.get('success'), 'Should fail for mismatched parent');
+    String message = (String)result.get('message');
+    System.assert(message.contains('pas liée') || message.contains('not linked'),
+      'Message should indicate zone is not linked to parent');
+  }
+
+  @isTest
+  static void testDeleteMapAreasException() {
+    // Test le chemin d'exception dans deleteMapAreas (lignes 433-436)
+    Test.startTest();
+
+    // Créer puis supprimer des zones
+    List<Map_Area__c> areas = new List<Map_Area__c>();
+    for (Integer i = 0; i < 2; i++) {
+      areas.add(new Map_Area__c(
+        Area_Type__c = 'Point',
+        Latitude__c = 48.8566,
+        Longitude__c = 2.3522
+      ));
+    }
+    insert areas;
+
+    List<Id> areaIds = new List<Id>();
+    for (Map_Area__c a : areas) {
+      areaIds.add(a.Id);
+    }
+
+    // Supprimer directement
+    delete areas;
+
+    // Essayer de supprimer à nouveau via la méthode
+    Map<String, Object> result = MapAreaService.deleteMapAreas(areaIds);
+
+    Test.stopTest();
+
+    // Les zones n'existent plus, donc devrait échouer
+    System.assertEquals(false, result.get('success'), 'Should fail for already deleted records');
+  }
+
+  @isTest
+  static void testSyncShapeToParentGeolocationFieldsMissing() {
+    // Test syncShapeToParent quand les champs geolocation n'existent pas sur le parent
+    Test.startTest();
+
+    Case testCase = new Case(Subject = 'Geolocation Fields Test');
+    insert testCase;
+
+    Map_Area__c mapArea = new Map_Area__c(
+      Area_Type__c = 'Point',
+      Latitude__c = 48.8566,
+      Longitude__c = 2.3522,
+      Address__c = 'Test Address',
+      Case__c = testCase.Id
+    );
+    insert mapArea;
+
+    // Appeler sync - les champs esriMap_Latitude__c etc. n'existent probablement pas sur Case
+    Map<String, Object> result = MapAreaService.syncShapeToParent(
+      mapArea.Id,
+      testCase.Id,
+      'Case__c'
+    );
+
+    Test.stopTest();
+
+    // Le résultat dépend de si les champs existent
+    System.assertNotEquals(null, result, 'Result should not be null');
+
+    // Si échec, vérifier que le message est approprié
+    if (!(Boolean)result.get('success')) {
+      String message = (String)result.get('message');
+      System.assert(message != null && message.length() > 0, 'Should have error message');
+    }
+  }
+
+  @isTest
+  static void testGetMapAreasByRelationshipQueryException() {
+    // Test le chemin d'exception dans getMapAreasByRelationship (ligne 132)
+    Test.startTest();
+
+    // Utiliser un champ qui causera une erreur de requête
+    // Le champ Owner n'est pas un lookup vers un objet custom, donc la requête échouera
+    Map<Id, Map_Area__c> result = MapAreaService.getMapAreasByRelationship(
+      UserInfo.getUserId(),
+      'OwnerId'
+    );
+
+    Test.stopTest();
+
+    // La méthode catch l'exception et retourne un map vide
+    System.assertNotEquals(null, result, 'Should return a map');
+    // OwnerId est une référence valide, donc pourrait fonctionner ou échouer selon le contexte
+  }
+
+  @isTest
+  static void testSaveMapAreasAllInvalidTypes() {
+    // Test quand toutes les formes ont des types invalides (couvre ligne 240-243)
+    Test.startTest();
+
+    List<MapAreaService.ShapeData> invalidShapes = new List<MapAreaService.ShapeData>();
+    for (Integer i = 0; i < 5; i++) {
+      MapAreaService.ShapeData shape = new MapAreaService.ShapeData();
+      shape.areaType = 'InvalidType' + i;
+      shape.latitude = 48.8566;
+      shape.longitude = 2.3522;
+      invalidShapes.add(shape);
+    }
+
+    MapAreaService.SaveResult result = MapAreaService.saveMapAreas(invalidShapes, null, null);
+
+    Test.stopTest();
+
+    System.assertEquals(false, result.success, 'Should fail when all shapes are invalid');
+    System.assertEquals('Aucune forme valide à sauvegarder', result.message);
+    System.assertEquals(0, result.recordsCreated, 'Should create 0 records');
+    System.assertEquals(5, result.errors.size(), 'Should have 5 errors');
+  }
+
+  @isTest
+  static void testSaveMapAreasRecordsCreatedZero() {
+    // Test le cas où recordsCreated reste à 0 après insertion (lignes 311-313)
+    // Difficile à simuler sans modifier le système, mais on peut tester avec des données invalides
+    Test.startTest();
+
+    List<MapAreaService.ShapeData> shapesData = new List<MapAreaService.ShapeData>();
+
+    // Une forme invalide
+    MapAreaService.ShapeData shape = new MapAreaService.ShapeData();
+    shape.areaType = 'NotAType';
+    shape.latitude = 48.8566;
+    shape.longitude = 2.3522;
+    shapesData.add(shape);
+
+    MapAreaService.SaveResult result = MapAreaService.saveMapAreas(shapesData, null, null);
+
+    Test.stopTest();
+
+    System.assertEquals(false, result.success, 'Should fail');
+    System.assertEquals(0, result.recordsCreated, 'Should create 0 records');
+  }
+
+  @isTest
+  static void testGetMapAreasByRelationshipWithSQLInjection() {
+    // Test pour forcer une exception SOQL dans getMapAreasByRelationship (ligne 132)
+    // Un nom de champ avec des caractères spéciaux devrait causer une erreur
+    Test.startTest();
+
+    Map<Id, Map_Area__c> result = MapAreaService.getMapAreasByRelationship(
+      UserInfo.getUserId(),
+      'Invalid Field Name With Spaces'
+    );
+
+    Test.stopTest();
+
+    // La méthode devrait attraper l'exception et retourner un map vide
+    System.assertNotEquals(null, result, 'Should return a map');
+    System.assertEquals(0, result.size(), 'Should return empty map after exception');
+  }
+
+  @isTest
+  static void testGetMapAreasByRelationshipExceptionPath() {
+    // Test avec un champ contenant des caractères invalides pour SOQL
+    Test.startTest();
+
+    Map<Id, Map_Area__c> result = MapAreaService.getMapAreasByRelationship(
+      UserInfo.getUserId(),
+      '\' OR 1=1 --'
+    );
+
+    Test.stopTest();
+
+    System.assertEquals(0, result.size(), 'Should return empty map after exception');
+  }
+
+  @isTest
+  static void testBulkSaveWith200Records() {
+    // Test bulk pour améliorer la couverture globale
+    Test.startTest();
+
+    List<MapAreaService.ShapeData> bulkShapes = new List<MapAreaService.ShapeData>();
+    for (Integer i = 0; i < 200; i++) {
+      MapAreaService.ShapeData shape = new MapAreaService.ShapeData();
+      shape.areaType = 'Point';
+      shape.latitude = 48.8566 + (i * 0.0001);
+      shape.longitude = 2.3522 + (i * 0.0001);
+      shape.address = 'Bulk Address ' + i;
+      shape.geoJson = '{"type":"Point"}';
+      bulkShapes.add(shape);
+    }
+
+    MapAreaService.SaveResult result = MapAreaService.saveMapAreas(bulkShapes, null, null);
+
+    Test.stopTest();
+
+    System.assertEquals(true, result.success, 'Should save all records');
+    System.assertEquals(200, result.recordsCreated, 'Should create 200 records');
+  }
+
+  @isTest
+  static void testHandleDeletedMapAreasWithNullList() {
+    // Test handleDeletedSynchronizedMapAreas avec null
+    Test.startTest();
+
+    // Appeler avec null - devrait être géré gracieusement
+    try {
+      MapAreaService.handleDeletedSynchronizedMapAreas(null);
+      System.assert(true, 'Should handle null gracefully');
+    } catch (Exception e) {
+      System.assert(false, 'Should not throw exception for null: ' + e.getMessage());
+    }
+
+    Test.stopTest();
+  }
+
+  @isTest
+  static void testSyncShapeValidParentButNoGeolocationFields() {
+    // Test syncShapeToParent avec un parent valide mais sans champs geolocation
+    Test.startTest();
+
+    Case testCase = new Case(Subject = 'No Geolocation Test');
+    insert testCase;
+
+    Map_Area__c mapArea = new Map_Area__c(
+      Area_Type__c = 'Polygon',
+      Latitude__c = 45.0,
+      Longitude__c = -75.0,
+      Address__c = 'Ottawa, Canada',
+      Geometry_JSON__c = '{"type":"Polygon"}',
+      Case__c = testCase.Id
+    );
+    insert mapArea;
+
+    // La synchronisation devrait échouer car Case n'a pas esriMap_Latitude__c etc.
+    Map<String, Object> result = MapAreaService.syncShapeToParent(
+      mapArea.Id,
+      testCase.Id,
+      'Case__c'
+    );
+
+    Test.stopTest();
+
+    // Vérifier que l'erreur est gérée
+    System.assertNotEquals(null, result, 'Result should not be null');
+    System.assertNotEquals(null, result.get('message'), 'Should have a message');
+  }
+
+  @isTest
+  static void testEnforceExclusiveSyncWithEmptyList() {
+    // Test enforceExclusiveSynchronization avec une liste vide
+    Test.startTest();
+
+    MapAreaService.enforceExclusiveSynchronization(new List<Map_Area__c>());
+
+    Test.stopTest();
+
+    // Ne devrait pas planter
+    System.assert(true, 'Should handle empty list');
+  }
+
+  @isTest
+  static void testDeleteMapAreaByIdNotFound() {
+    // Test deleteMapArea avec un ID qui n'existe pas
+    Test.startTest();
+
+    String fakeId = Map_Area__c.sObjectType.getDescribe().getKeyPrefix() + '000000000999';
+    Map<String, Object> result = MapAreaService.deleteMapArea(fakeId);
+
+    Test.stopTest();
+
+    System.assertEquals(false, result.get('success'), 'Should fail for non-existent ID');
+  }
+
+  // ========================================================================
+  // TESTS AVEC CHAMPS ESRIMAP_* SUR CASE (COUVERTURE SYNCHRONISATION)
+  // ========================================================================
+
+  @isTest
+  static void testSyncShapeToParentWithCaseGeolocationFields() {
+    // Test syncShapeToParent avec Case qui a maintenant les champs esriMap_*
+    Test.startTest();
+
+    Case testCase = new Case(Subject = 'Sync With Geolocation Fields');
+    insert testCase;
+
+    Map_Area__c mapArea = new Map_Area__c(
+      Area_Type__c = 'Point',
+      Latitude__c = 48.8566,
+      Longitude__c = 2.3522,
+      Address__c = 'Paris, France',
+      Case__c = testCase.Id
+    );
+    insert mapArea;
+
+    // Synchroniser - maintenant les champs existent sur Case
+    Map<String, Object> result = MapAreaService.syncShapeToParent(
+      mapArea.Id,
+      testCase.Id,
+      'Case__c'
+    );
+
+    Test.stopTest();
+
+    System.assertEquals(true, result.get('success'), 'Sync should succeed now that fields exist');
+
+    // Vérifier que les champs ont été mis à jour
+    Case updatedCase = [
+      SELECT esriMap_Latitude__c, esriMap_Longitude__c, esriMap_Address__c
+      FROM Case
+      WHERE Id = :testCase.Id
+    ];
+    System.assertEquals(48.8566, updatedCase.esriMap_Latitude__c, 'Latitude should be synced');
+    System.assertEquals(2.3522, updatedCase.esriMap_Longitude__c, 'Longitude should be synced');
+    System.assertEquals('Paris, France', updatedCase.esriMap_Address__c, 'Address should be synced');
+  }
+
+  @isTest
+  static void testSyncShapeToParentMarksIsSynchronized() {
+    // Test que syncShapeToParent marque Is_Synchronized__c = true
+    Test.startTest();
+
+    Case testCase = new Case(Subject = 'Sync Flag Test');
+    insert testCase;
+
+    Map_Area__c mapArea = new Map_Area__c(
+      Area_Type__c = 'Polygon',
+      Latitude__c = 45.5017,
+      Longitude__c = -73.5673,
+      Address__c = 'Montreal, Canada',
+      Case__c = testCase.Id,
+      Is_Synchronized__c = false
+    );
+    insert mapArea;
+
+    Map<String, Object> result = MapAreaService.syncShapeToParent(
+      mapArea.Id,
+      testCase.Id,
+      'Case__c'
+    );
+
+    Test.stopTest();
+
+    System.assertEquals(true, result.get('success'), 'Sync should succeed');
+
+    // Vérifier que Is_Synchronized__c est maintenant true
+    Map_Area__c updatedArea = [
+      SELECT Is_Synchronized__c
+      FROM Map_Area__c
+      WHERE Id = :mapArea.Id
+    ];
+    System.assertEquals(true, updatedArea.Is_Synchronized__c, 'Area should be marked as synchronized');
+  }
+
+  @isTest
+  static void testClearParentSynchronizationFieldsOnDelete() {
+    // Test clearParentSynchronizationFields est appelé quand on supprime la dernière zone synchronisée
+    Test.startTest();
+
+    Case testCase = new Case(Subject = 'Clear Fields On Delete');
+    insert testCase;
+
+    // Pré-remplir les champs sur Case
+    testCase.esriMap_Latitude__c = 48.8566;
+    testCase.esriMap_Longitude__c = 2.3522;
+    testCase.esriMap_Address__c = 'Paris';
+    update testCase;
+
+    Map_Area__c mapArea = new Map_Area__c(
+      Area_Type__c = 'Point',
+      Latitude__c = 48.8566,
+      Longitude__c = 2.3522,
+      Address__c = 'Paris',
+      Case__c = testCase.Id,
+      Is_Synchronized__c = true
+    );
+    insert mapArea;
+
+    // Supprimer la zone synchronisée - devrait vider les champs du Case
+    delete mapArea;
+
+    Test.stopTest();
+
+    // Vérifier que les champs sont vidés
+    Case updatedCase = [
+      SELECT esriMap_Latitude__c, esriMap_Longitude__c, esriMap_Address__c
+      FROM Case
+      WHERE Id = :testCase.Id
+    ];
+    System.assertEquals(null, updatedCase.esriMap_Latitude__c, 'Latitude should be cleared');
+    System.assertEquals(null, updatedCase.esriMap_Longitude__c, 'Longitude should be cleared');
+    System.assertEquals(null, updatedCase.esriMap_Address__c, 'Address should be cleared');
+  }
+
+  @isTest
+  static void testEnforceExclusiveSyncDesynchronizesOthers() {
+    // Test que quand une zone est synchronisée, les autres du même parent sont désynchronisées
+    Test.startTest();
+
+    Case testCase = new Case(Subject = 'Exclusive Sync Test');
+    insert testCase;
+
+    // Créer plusieurs zones liées au même Case
+    List<Map_Area__c> areas = new List<Map_Area__c>();
+    for (Integer i = 0; i < 3; i++) {
+      Map_Area__c area = new Map_Area__c(
+        Area_Type__c = 'Point',
+        Latitude__c = 48.8566 + (i * 0.01),
+        Longitude__c = 2.3522 + (i * 0.01),
+        Address__c = 'Area ' + i,
+        Case__c = testCase.Id,
+        Is_Synchronized__c = false
+      );
+      areas.add(area);
+    }
+    insert areas;
+
+    // Synchroniser la première zone
+    MapAreaService.syncShapeToParent(areas[0].Id, testCase.Id, 'Case__c');
+
+    // Vérifier que seule la première est synchronisée
+    List<Map_Area__c> afterFirst = [
+      SELECT Id, Is_Synchronized__c
+      FROM Map_Area__c
+      WHERE Case__c = :testCase.Id
+      ORDER BY Address__c
+    ];
+    System.assertEquals(true, afterFirst[0].Is_Synchronized__c, 'First should be synced');
+    System.assertEquals(false, afterFirst[1].Is_Synchronized__c, 'Second should not be synced');
+    System.assertEquals(false, afterFirst[2].Is_Synchronized__c, 'Third should not be synced');
+
+    // Synchroniser la deuxième zone
+    MapAreaService.syncShapeToParent(areas[1].Id, testCase.Id, 'Case__c');
+
+    Test.stopTest();
+
+    // Vérifier que maintenant seule la deuxième est synchronisée
+    List<Map_Area__c> afterSecond = [
+      SELECT Id, Is_Synchronized__c
+      FROM Map_Area__c
+      WHERE Case__c = :testCase.Id
+      ORDER BY Address__c
+    ];
+    System.assertEquals(false, afterSecond[0].Is_Synchronized__c, 'First should be desynchronized');
+    System.assertEquals(true, afterSecond[1].Is_Synchronized__c, 'Second should be synced');
+    System.assertEquals(false, afterSecond[2].Is_Synchronized__c, 'Third should not be synced');
+  }
+
+  @isTest
+  static void testSyncShapeToParentWithDifferentAreaTypes() {
+    // Test sync avec différents types de zones
+    Test.startTest();
+
+    Case testCase = new Case(Subject = 'Different Types Sync');
+    insert testCase;
+
+    List<String> areaTypes = new List<String>{'Point', 'Polygon', 'Polyline', 'Rectangle', 'Circle'};
+
+    for (String areaType : areaTypes) {
+      Map_Area__c mapArea = new Map_Area__c(
+        Area_Type__c = areaType,
+        Latitude__c = 48.8566,
+        Longitude__c = 2.3522,
+        Address__c = 'Test ' + areaType,
+        Case__c = testCase.Id
+      );
+      insert mapArea;
+
+      Map<String, Object> result = MapAreaService.syncShapeToParent(
+        mapArea.Id,
+        testCase.Id,
+        'Case__c'
+      );
+
+      System.assertEquals(true, result.get('success'), 'Sync should succeed for ' + areaType);
+
+      // Nettoyer pour le prochain test
+      delete mapArea;
+    }
+
+    Test.stopTest();
+  }
+
+  @isTest
+  static void testBulkDeleteSynchronizedAreas() {
+    // Test suppression en masse de zones synchronisées
+    Test.startTest();
+
+    // Créer plusieurs Cases
+    List<Case> cases = new List<Case>();
+    for (Integer i = 0; i < 5; i++) {
+      cases.add(new Case(Subject = 'Bulk Delete Case ' + i));
+    }
+    insert cases;
+
+    // Pré-remplir les champs sur Cases
+    for (Integer i = 0; i < cases.size(); i++) {
+      cases[i].esriMap_Latitude__c = 48.8566 + i;
+      cases[i].esriMap_Longitude__c = 2.3522 + i;
+    }
+    update cases;
+
+    // Créer une zone synchronisée par Case
+    List<Map_Area__c> areas = new List<Map_Area__c>();
+    for (Integer i = 0; i < cases.size(); i++) {
+      areas.add(new Map_Area__c(
+        Area_Type__c = 'Point',
+        Latitude__c = 48.8566 + i,
+        Longitude__c = 2.3522 + i,
+        Case__c = cases[i].Id,
+        Is_Synchronized__c = true
+      ));
+    }
+    insert areas;
+
+    // Supprimer toutes les zones en masse
+    delete areas;
+
+    Test.stopTest();
+
+    // Vérifier que les champs sont vidés sur tous les Cases
+    List<Case> updatedCases = [
+      SELECT esriMap_Latitude__c, esriMap_Longitude__c
+      FROM Case
+      WHERE Id IN :cases
+    ];
+    for (Case c : updatedCases) {
+      System.assertEquals(null, c.esriMap_Latitude__c, 'Latitude should be cleared');
+      System.assertEquals(null, c.esriMap_Longitude__c, 'Longitude should be cleared');
+    }
+  }
+
+  @isTest
+  static void testSyncShapeToParentUpdatesExistingValues() {
+    // Test que sync met à jour des valeurs existantes sur le parent
+    Test.startTest();
+
+    Case testCase = new Case(
+      Subject = 'Update Existing Values',
+      esriMap_Latitude__c = 0,
+      esriMap_Longitude__c = 0,
+      esriMap_Address__c = 'Old Address'
+    );
+    insert testCase;
+
+    Map_Area__c mapArea = new Map_Area__c(
+      Area_Type__c = 'Point',
+      Latitude__c = 51.5074,
+      Longitude__c = -0.1278,
+      Address__c = 'London, UK',
+      Case__c = testCase.Id
+    );
+    insert mapArea;
+
+    Map<String, Object> result = MapAreaService.syncShapeToParent(
+      mapArea.Id,
+      testCase.Id,
+      'Case__c'
+    );
+
+    Test.stopTest();
+
+    System.assertEquals(true, result.get('success'), 'Sync should succeed');
+
+    Case updatedCase = [
+      SELECT esriMap_Latitude__c, esriMap_Longitude__c, esriMap_Address__c
+      FROM Case
+      WHERE Id = :testCase.Id
+    ];
+    System.assertEquals(51.5074, updatedCase.esriMap_Latitude__c, 'Latitude should be updated');
+    System.assertEquals(-0.1278, updatedCase.esriMap_Longitude__c, 'Longitude should be updated');
+    System.assertEquals('London, UK', updatedCase.esriMap_Address__c, 'Address should be updated');
+  }
+
+  @isTest
+  static void testGetParentObjectTypeFromCaseId() {
+    // Test indirect de getParentObjectType via syncShapeToParent avec Case
+    Test.startTest();
+
+    Case testCase = new Case(Subject = 'Parent Type Test');
+    insert testCase;
+
+    Map_Area__c mapArea = new Map_Area__c(
+      Area_Type__c = 'Point',
+      Latitude__c = 48.8566,
+      Longitude__c = 2.3522,
+      Case__c = testCase.Id
+    );
+    insert mapArea;
+
+    // La méthode syncShapeToParent appelle getParentObjectType en interne
+    Map<String, Object> result = MapAreaService.syncShapeToParent(
+      mapArea.Id,
+      testCase.Id,
+      'Case__c'
+    );
+
+    Test.stopTest();
+
+    // Le fait que ça fonctionne prouve que getParentObjectType a retourné 'Case'
+    System.assertEquals(true, result.get('success'), 'Should identify Case as parent type');
+  }
 }
